@@ -1,0 +1,19 @@
+# --- not part of the published site ---
+
+# legacy PHP site (superseded by index.html; kept locally only)
+old/
+
+# test captures and browser artifacts
+screenshots/
+
+# dev dependencies (npm install in tests/)
+node_modules/
+package-lock.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+# GitHub Pages must not treat this as a Jekyll build
+# (see .nojekyll, committed alongside)

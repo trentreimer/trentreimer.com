@@ -1,0 +1,729 @@
+/* ============================================================
+   trentreimer.com — test-site-1
+   CRT terminal theme · one-page scroll prototype
+   ============================================================ */
+
+:root {
+  --bg:           #040704;
+  --bg2:          #081109;
+  --phos:         #45ff6b;   /* green phosphor */
+  --phos-dim:     #2f9a4d;
+  --phos-bright:  #c8ffdb;
+  --amber:        #ffb84d;   /* ai / arcade accents */
+  --cyan:         #5ad7ff;   /* packets */
+  --red:          #ff5f5f;   /* alerts / terminal chrome */
+  --pac:          #ffd94a;   /* pac-man yellow */
+  --brown:        #a9662d;   /* donkey kong's hide */
+  --tan:          #e0b184;   /* donkey kong's belly and muzzle */
+  --ink:          #d5f2df;   /* body text */
+  --ink-dim:      #9dc7ab;
+  --line:         #123822;
+  --line-strong:  #1e5c33;
+  --mono: 'Share Tech Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --disp: 'VT323', 'Share Tech Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  background: var(--bg);
+  color-scheme: dark;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 16.5px;
+  line-height: 1.6;
+  /* faint terminal grid */
+  background:
+    linear-gradient(rgba(69, 255, 107, .028) 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(69, 255, 107, .028) 1px, transparent 1px) 0 0 / 44px 100%,
+    var(--bg);
+  text-shadow: 0 0 7px rgba(69, 255, 107, .28);
+  overflow-x: hidden;
+}
+body.booting { overflow: hidden; }
+
+::selection { background: rgba(69, 255, 107, .28); color: #fff; }
+
+::-webkit-scrollbar { width: 10px; background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #164024; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #1e5c33; }
+
+a { color: var(--phos); text-decoration: none; }
+a:hover, a:focus-visible { color: var(--phos-bright); text-shadow: 0 0 10px rgba(69,255,107,.8); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ============================================================
+   CRT overlays
+   ============================================================ */
+#crt { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+#crt::before {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg,
+    rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+#crt::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center,
+    transparent 52%, rgba(0, 8, 2, .55) 100%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  #crt { animation: flicker 4s steps(60) infinite; }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    48%      { opacity: .985; }
+    50%      { opacity: .96; }
+    52%      { opacity: .99; }
+  }
+}
+
+/* ============================================================
+   boot overlay
+   ============================================================ */
+#boot { display: none; }
+html.js #boot {
+  position: fixed; inset: 0; z-index: 200;
+  background: #000;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 28px;
+  transition: opacity .35s ease;
+}
+html.js body.crt-off #boot { opacity: 0; }
+.bootbox {
+  width: min(640px, 88vw);
+  font-size: 15px; line-height: 1.9;
+  color: var(--ink-dim);
+}
+.bline { opacity: 0; transform: translateY(5px); }
+.bline.show { opacity: 1; transform: none; transition: .16s ease; }
+.bline i { color: var(--phos); font-style: normal; text-shadow: 0 0 8px rgba(69,255,107,.7); }
+.bline em { font-style: normal; color: #3d6b4c; font-size: .85em; }
+.bline .ps1 { margin-right: 6px; }
+.bootskip {
+  font-size: 11px; letter-spacing: .28em; text-transform: uppercase;
+  color: #2a5636; animation: bootpulse 1.6s ease-in-out infinite;
+}
+@keyframes bootpulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* CRT power-on white line flash */
+body.crt-on::after {
+  content: ""; position: fixed; inset: 0; z-index: 190;
+  background: #eaffe9; transform-origin: center;
+  pointer-events: none;
+  animation: crton .55s ease-out forwards;
+}
+@keyframes crton {
+  0%   { opacity: .95; transform: scaleY(.006); }
+  30%  { opacity: .7;  transform: scaleY(.012); }
+  70%  { opacity: .35; transform: scaleY(1); }
+  100% { opacity: 0;   visibility: hidden; }
+}
+
+/* ============================================================
+   pac-man scroll progress
+   ============================================================ */
+#pacbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 34px;
+  z-index: 95; pointer-events: none;
+}
+#pacdots {
+  position: absolute; top: 14px; bottom: 14px; left: 28px; right: 28px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+#pacdots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--phos-dim);
+  box-shadow: 0 0 6px rgba(69, 255, 107, .35);
+  transition: opacity .16s, transform .16s;
+}
+#pacdots i.eaten { opacity: 0; transform: scale(.3); }
+#pac {
+  position: absolute; top: 0; left: 0; will-change: transform;
+  filter: drop-shadow(0 0 7px rgba(255, 217, 74, .85));
+}
+.pac-open, .pac-closed { fill: var(--pac); }
+.pac-open   { animation: chompA .24s linear infinite; }
+.pac-closed { animation: chompB .24s linear infinite; }
+@keyframes chompA { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes chompB { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+
+/* ============================================================
+   nav — process list
+   ============================================================ */
+#proc {
+  position: fixed; left: 16px; top: 50%; transform: translateY(-50%);
+  z-index: 100; display: flex; flex-direction: column; gap: 4px;
+}
+#proc a {
+  display: flex; align-items: baseline; gap: 2px;
+  color: var(--phos-dim); text-decoration: none;
+  font-size: 15px; line-height: 1.4;
+  padding: 3px 12px 3px 10px;
+  border-left: 2px solid transparent;
+  text-shadow: none;
+}
+#proc a b {
+  font-weight: normal; width: 1.35em; color: var(--phos);
+  opacity: .55; text-shadow: 0 0 6px rgba(69,255,107,.5);
+}
+#proc a:hover, #proc a:focus-visible { color: var(--phos-bright); }
+#proc a.active {
+  color: var(--phos-bright);
+  border-left-color: var(--phos);
+  background: linear-gradient(90deg, rgba(69,255,107,.1), transparent 80%);
+  text-shadow: 0 0 9px rgba(69,255,107,.65);
+}
+#sndbtn {
+  position: fixed; right: 16px; bottom: 16px; z-index: 100;
+  font: 14px var(--mono); letter-spacing: .04em;
+  color: var(--phos-dim); background: rgba(4, 7, 4, .8);
+  border: 1px solid var(--line-strong); border-radius: 4px;
+  padding: 6px 10px; cursor: pointer; text-shadow: none;
+}
+#sndbtn:hover, #sndbtn.on { color: var(--phos-bright); border-color: var(--phos-dim); }
+#sndbtn.on { text-shadow: 0 0 8px rgba(69,255,107,.6); }
+
+@media (max-width: 900px) {
+  #proc {
+    left: 0; right: 0; top: 0; transform: none;
+    flex-direction: row; justify-content: center; gap: 0;
+    background: rgba(4, 7, 4, .88);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(5px);
+  }
+  #proc a { font-size: 14px; padding: 9px 9px; border-left: none; border-bottom: 2px solid transparent; }
+  #proc a b { width: auto; margin-right: 3px; }
+  #proc a span { display: none; }
+  #proc a.active { border-bottom-color: var(--phos); background: none; }
+  #sndbtn { bottom: 12px; right: 12px; }
+}
+
+/* ============================================================
+   sections
+   ============================================================ */
+main { position: relative; z-index: 1; }
+.sec { padding: 11vh 0; border-top: 1px dashed var(--line); }
+.sec:first-of-type { border-top: none; }
+/* Short stages get ~a screen of their own so stages read one at a time
+   and a stage's neighbour doesn't co-trigger while it is still on screen. */
+.sec:not(.hero) {
+  min-height: 78vh;
+  min-height: 78svh;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+section { scroll-margin-top: 20px; }
+
+.stagebar {
+  font-family: var(--disp); font-size: 1.1rem; letter-spacing: .22em;
+  color: var(--amber); margin: 0 0 10px; text-shadow: 0 0 10px rgba(255,184,77,.35);
+}
+.stagebar span {
+  display: inline-block; margin-right: 14px; padding: 0 8px;
+  border: 1px solid rgba(255, 184, 77, .5); border-radius: 3px;
+}
+h2 {
+  font-family: var(--disp); font-weight: 400;
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+  color: var(--phos-bright); margin: 0 0 30px;
+  text-shadow: 0 0 16px rgba(69, 255, 107, .55);
+  white-space: pre-wrap;
+}
+
+.cols {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 26px; align-items: start;
+}
+@media (max-width: 780px) { .cols { grid-template-columns: 1fr; } }
+.col { min-width: 0; }
+
+/* A stage can hold a group of elements back until its typing finishes: anything
+   marked data-fade (and, in the about stage, the system card) appears together
+   the moment the stage gains .typed-done — no per-item stagger, so it reads as
+   one block arriving. */
+html.js [data-fade] { opacity: 0; }
+html.js .typed-done [data-fade] {
+  opacity: 1;
+  /* a beat between the command landing and the block arriving */
+  transition: opacity .5s ease .45s;
+}
+html.js #about:not(.typed-done) .card { opacity: 0; transform: translateY(18px); }
+html.js #about.typed-done .card {
+  opacity: 1; transform: none;
+  transition: opacity .5s ease .45s, transform .5s ease .45s;
+}
+
+/* generic reveal-on-scroll card */
+html.js .card { opacity: 0; transform: translateY(18px); }
+html.js .played .card {
+  opacity: 1; transform: none;
+  transition: opacity .7s ease .05s, transform .7s ease .05s;
+}
+.card {
+  background: rgba(8, 16, 9, .72);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 18px 20px;
+  box-shadow: inset 0 0 50px rgba(0, 40, 10, .1), 0 6px 30px rgba(0, 0, 0, .5);
+}
+.cardtitle {
+  margin: 0 0 14px; color: var(--amber);
+  font-size: 12.5px; letter-spacing: .16em; text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(255, 184, 77, .3);
+}
+
+/* finger / system card */
+.finger { display: grid; grid-template-columns: auto 1fr; gap: 7px 20px; margin: 0; font-size: 15.5px; }
+.finger dt { color: var(--phos-dim); }
+.finger dd { margin: 0; color: var(--ink); }
+.finger a { text-shadow: 0 0 8px rgba(69,255,107,.4); }
+
+/* ============================================================
+   terminal windows
+   ============================================================ */
+.term {
+  background: linear-gradient(180deg, rgba(10, 20, 11, .92), rgba(6, 12, 7, .92));
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(69, 255, 107, .06), 0 10px 44px rgba(0, 0, 0, .65),
+              inset 0 0 70px rgba(0, 40, 10, .12);
+  overflow: hidden;
+}
+.tbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-bottom: 1px solid var(--line);
+  color: var(--phos-dim); font-size: 13px; letter-spacing: .05em;
+}
+.tbar i { width: 10px; height: 10px; border-radius: 50%; opacity: .8; }
+.tbar i.d1 { background: var(--red); }
+.tbar i.d2 { background: var(--amber); }
+.tbar i.d3 { background: var(--phos); }
+.tbar span { margin-left: 6px; }
+.tbar.bot { border-bottom: none; border-top: 1px solid var(--line); justify-content: flex-end; }
+.tbody { padding: 16px 18px; display: flex; flex-direction: column; gap: 9px; }
+
+.trow { display: flex; gap: 10px; min-width: 0; }
+.trow .ps1 { color: var(--phos); flex: 0 0 auto; text-shadow: 0 0 8px rgba(69,255,107,.6); }
+.trow.out .t { color: var(--ink-dim); }
+.trow.big .t {
+  font-family: var(--disp);
+  font-size: clamp(2.4rem, 6.5vw, 4.2rem);
+  color: var(--phos-bright);
+  text-shadow: 0 0 22px rgba(69, 255, 107, .75), 0 0 60px rgba(69, 255, 107, .3);
+  line-height: 1.05;
+}
+.trow .t.strong { color: var(--phos-bright); text-shadow: 0 0 12px rgba(69,255,107,.6); }
+.t { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Reserve a typed element's final box before its type-in runs, so cards are
+   their true size from the first frame instead of growing line by line.
+   The ghost holds the final text IN FLOW — that is what reserves the height at
+   this width — and is invisible. The live text is overlaid on top of that same
+   box (the text node is wrapped in a span by the typing code), so the two never
+   add up: the element is exactly as tall as its final text from frame one. */
+.t.has-ghost { position: relative; }
+/* An inline .t (the boot command line) needs an inline-block containing block
+   for the absolutely positioned overlay below: relative to an inline box, that
+   child is sized to a single line fragment, which broke the typed text one
+   character per line whenever the line wrapped — as the boot line does on a
+   phone while the webfont is still loading. Block-level .t is unaffected. */
+.t.has-ghost.t-inline { display: inline-block; }
+.t.has-ghost > .type-ghost {
+  visibility: hidden;
+  white-space: inherit; overflow-wrap: inherit;
+}
+.t.has-ghost > .type-live {
+  position: absolute; inset: 0;
+  white-space: inherit; overflow-wrap: inherit;
+}
+/* The caret is zero-advance: an inline-block with no layout width, painting the
+   glyph just past the last typed character via a transform (transforms do not
+   affect layout). A caret that consumed width would be pushed onto the next line
+   whenever the typing filled a line exactly — the "cursor skips down a line"
+   jump — so it must never take part in line breaking. */
+.typing::after {
+  content: "▊";
+  display: inline-block;
+  width: 0;
+  overflow: visible;
+  transform: translateX(2px);
+  color: var(--phos);
+  animation: blink 1.05s steps(1) infinite;
+}
+/* While a ghost reserves the box, the element's own caret would be generated
+   after the ghost — i.e. parked at the end of the final text, with the typing
+   running up to it. Suppress it and let the caret ride the live overlay text,
+   which is where the typing actually is. */
+.t.has-ghost.typing::after { content: none; }
+@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+.term.small .t { font-size: 15px; }
+.term.small .tbody { gap: 6px; }
+
+/* ============================================================
+   hero
+   ============================================================ */
+.hero { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; padding: 10vh 0 8vh; }
+.hero .wrap { position: relative; width: 100%; }
+.hero .term { max-width: 760px; margin: 0 auto; }
+.hiscore {
+  position: absolute; top: -38px; right: 0; margin: 0;
+  font-family: var(--disp); font-size: 1rem; letter-spacing: .3em;
+  color: var(--amber); opacity: .8; text-shadow: 0 0 10px rgba(255,184,77,.4);
+  animation: hiscorepulse 2.6s ease-in-out infinite;
+}
+@keyframes hiscorepulse { 0%,100% { opacity: .5; } 50% { opacity: .95; } }
+
+.mods {
+  list-style: none; display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 10px; padding: 0; margin: 26px 0 0;
+}
+.mods li {
+  border: 1px solid var(--line-strong); border-radius: 3px;
+  padding: 4px 14px; font-size: 14px; color: var(--phos);
+  background: rgba(8, 20, 10, .55);
+}
+html.js .mods li { opacity: 0; transform: translateY(10px) scale(.94); }
+html.js .typed-done .mods li {
+  opacity: 1; transform: none;
+  transition: opacity .4s ease, transform .4s ease;
+  transition-delay: calc(var(--i) * .13s + .2s);
+}
+
+.scrollhint {
+  position: absolute; left: 0; right: 0; bottom: -64px;
+  text-align: center; color: var(--phos-dim); font-size: 13px;
+  letter-spacing: .25em; animation: bob 1.8s ease-in-out infinite;
+  transition: opacity .5s; text-shadow: none;
+}
+.scrollhint.off { opacity: 0; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+
+/* ============================================================
+   network stage
+   ============================================================ */
+.netviz { padding: 10px 6px 0; }
+.netviz svg { display: block; width: 100%; height: auto; max-height: 62vh; }
+
+.link {
+  fill: none; stroke: var(--line-strong); stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1.15s cubic-bezier(.5,0,.3,1) var(--d), stroke .6s ease var(--d);
+}
+html:not(.js) .link { stroke-dashoffset: 0; }
+.played .link { stroke-dashoffset: 0; }
+.on .link { stroke: #2e8f4f; }
+
+.node rect { fill: #0a150c; stroke: var(--phos-dim); stroke-width: 1.5; }
+.node text {
+  font-family: var(--mono); font-size: 20px;
+  fill: var(--phos-bright); text-anchor: middle;
+  text-shadow: 0 0 6px rgba(69,255,107,.5);
+}
+.node-ai rect { stroke: var(--amber); }
+.node-ai text { fill: var(--amber); text-shadow: 0 0 8px rgba(255,184,77,.55); }
+.ring {
+  fill: none; stroke: var(--cyan); stroke-width: 2;
+  opacity: 0; transform-box: fill-box; transform-origin: center;
+  transform: scale(.65);
+}
+.on .ring { animation: ringpulse 2.3s ease-out infinite; animation-delay: var(--d); }
+@keyframes ringpulse {
+  0%   { opacity: .5; transform: scale(.65); }
+  75%  { opacity: 0;  transform: scale(1.7); }
+  100% { opacity: 0;  transform: scale(1.7); }
+}
+
+.pkt { opacity: 0; transition: opacity .4s; }
+.on .pkt { opacity: 1; }
+.pkt.c1, .pkt.c2, .pkt.c3 { fill: var(--cyan); color: var(--cyan); }
+.pkt.a1 { fill: var(--amber); color: var(--amber); }
+.pkt.g1, .pkt.g2 { fill: var(--phos); color: var(--phos); }
+.on .pkt { filter: drop-shadow(0 0 5px currentColor); }
+
+/* traceroute terminal — sits beside the diagram and is sized to its content;
+   the diagram takes the larger share so its node labels stay large. Hops stay
+   in one sequential column, one per line, like a real trace. */
+#network .term.small { margin-top: 0; }
+
+/* unequal pair: the diagram needs width, the trace only needs its text */
+.netpair {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(340px, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+/* the trace lines are pre-wrap, so keep the terminal wide enough that the
+   longest hop stays on one line */
+#network .term.small .t { white-space: pre; }
+@media (max-width: 1180px) {
+  #network .term.small .t { white-space: pre-wrap; }
+}
+@media (max-width: 880px) {
+  .netpair { grid-template-columns: minmax(0, 1fr); }
+  #network .term.small { margin-top: 26px; }
+}
+
+/* on phones the diagram stays legible by panning instead of shrinking */
+@media (max-width: 700px) {
+  .netviz { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .netviz svg { min-width: 480px; }
+}
+
+/* ============================================================
+   ai stage — ascii neural net
+   ============================================================ */
+.netcard pre {
+  margin: 4px 0 10px;
+  font-family: var(--mono);
+  font-size: clamp(12px, 1.6vw, 18.5px);
+  line-height: 1.5;
+  color: var(--ink-dim);
+  overflow: hidden;
+}
+#net .nd { color: var(--amber); opacity: .18; }
+.on .netcard #net .nd { animation: nodefire 2.5s ease-in-out infinite; animation-delay: var(--dl); }
+@keyframes nodefire {
+  0%, 60%, 100% { opacity: .18; text-shadow: none; }
+  10%           { opacity: 1;  text-shadow: 0 0 9px var(--amber), 0 0 22px rgba(255,184,77,.5); }
+}
+.netlegend { margin: 0; font-size: 13px; color: var(--phos-dim); text-shadow: none; }
+html:not(.js) #net { opacity: .85; }
+html.no-anim #net .nd { opacity: .9; }
+
+/* ============================================================
+   skills stage — rpg stat bars
+   ============================================================ */
+.skill {
+  display: grid;
+  grid-template-columns: 6.6em 5.4em 1fr minmax(110px, 15em) 2.4em;
+  gap: 12px; align-items: center;
+  font-size: 15px;
+  padding: 4px 0;
+}
+html.js .skill { opacity: 0; transform: translateX(-12px); }
+html.js .played .skill {
+  opacity: 1; transform: none;
+  transition: opacity .45s ease var(--d), transform .45s ease var(--d);
+}
+.skill .perm { color: var(--phos-dim); white-space: nowrap; }
+.skill .who  { color: var(--amber); opacity: .75; white-space: nowrap; }
+.skill .label { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill .pct  { color: var(--phos); text-align: right; }
+.skill .bar {
+  position: relative; height: 14px;
+  border: 1px solid var(--line-strong); border-radius: 3px;
+  background: rgba(0, 0, 0, .45);
+  overflow: hidden;
+}
+.skill .bar i {
+  display: block; height: 100%; width: 0;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, .28) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, var(--phos) 0%, #1fae46 100%);
+  box-shadow: 0 0 10px rgba(69, 255, 107, .55);
+}
+html.js .played .skill .bar i {
+  width: calc(var(--w) * 1%);
+  transition: width 1.1s cubic-bezier(.2,.7,.3,1) calc(var(--d) + .35s);
+}
+html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
+.hint { color: #3d6b4c; font-size: 13px; margin: 14px 2px 0; text-shadow: none; }
+
+@media (max-width: 780px) {
+  .skill { grid-template-columns: 1fr 1fr minmax(90px, 10em) 2.2em; }
+  .skill .perm, .skill .who { display: none; }
+}
+
+/* ============================================================
+   contact stage
+   ============================================================ */
+.btnrow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.tbtn, #copybtn, #pingbtn {
+  display: inline-block;
+  font: 15px var(--mono); letter-spacing: .03em;
+  color: var(--phos); background: rgba(8, 20, 10, .5);
+  border: 1px solid var(--phos-dim); border-radius: 4px;
+  padding: 8px 14px; cursor: pointer;
+  text-shadow: 0 0 8px rgba(69, 255, 107, .35);
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+.tbtn:hover, .tbtn:focus-visible,
+#copybtn:hover, #pingbtn:hover {
+  color: var(--phos-bright); background: rgba(69, 255, 107, .14);
+  box-shadow: 0 0 16px rgba(69, 255, 107, .25); text-decoration: none;
+}
+#copied { margin: 12px 2px 0; color: var(--phos); font-size: 14px; }
+
+.pline { font-size: 14.5px; color: var(--ink-dim); }
+.pline.ok { color: var(--phos); }
+
+/* ============================================================
+   bonus · arcade cabinet
+   The cabinet shell (assets/arcade.js) builds its own inner markup; these rules
+   style it. Nothing here loads a game — the scripts arrive only when the
+   visitor scrolls this far.
+   ============================================================ */
+.arcade .wrap { position: relative; }
+
+.arcade-slot {
+  padding: 16px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(69,255,107,.05), transparent 60%),
+    rgba(6, 12, 7, .86);
+}
+
+.cab-waiting { text-align: center; padding: 34px 10px; }
+.cab-wait { margin: 0; color: var(--phos-dim); letter-spacing: .18em; font-size: 14px; }
+.cab-dot { animation: blink 1.05s steps(1) infinite; color: var(--phos); }
+
+/* head-up display */
+.cab-top {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px;
+  padding: 0 4px 12px; border-bottom: 1px solid var(--line);
+  font-size: 14px; color: var(--phos-dim);
+}
+.cab-title {
+  font-family: var(--disp); font-size: 1.5rem; letter-spacing: .16em;
+  color: var(--amber); text-shadow: 0 0 12px rgba(255,184,77,.45);
+}
+.cab-stat { letter-spacing: .1em; }
+.cab-stat b { color: var(--phos-bright); font-weight: normal; margin-left: 4px; }
+.cab-stat.cab-lives b { color: var(--red); letter-spacing: .18em; }
+
+/* the screen itself */
+.cab-screen {
+  display: flex; justify-content: center;
+  padding: 14px 0 4px;
+}
+.cab-screen canvas {
+  display: block;
+  width: auto; height: auto;      /* the shell fits this to the screen area */
+  max-width: 100%;
+  background: #030603;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: inset 0 0 60px rgba(0, 40, 10, .35), 0 0 26px rgba(69,255,107,.08);
+  image-rendering: pixelated;
+  touch-action: manipulation;
+  outline: none;
+}
+.cab-screen canvas:focus-visible { border-color: var(--phos); }
+
+/* controls */
+.cab-controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding-top: 12px; border-top: 1px solid var(--line);
+}
+.cab-btn {
+  font: 14px var(--mono); letter-spacing: .04em;
+  color: var(--phos); background: rgba(8, 20, 10, .5);
+  border: 1px solid var(--phos-dim); border-radius: 4px;
+  padding: 7px 12px; cursor: pointer;
+  text-shadow: 0 0 8px rgba(69,255,107,.35);
+}
+.cab-btn:hover, .cab-btn:focus-visible {
+  color: var(--phos-bright); background: rgba(69,255,107,.14);
+}
+.cab-btn[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); }
+.cab-keys { margin-left: auto; color: #3d6b4c; font-size: 12.5px; letter-spacing: .06em; }
+
+/* touch pad — only offered where there is no keyboard */
+.cab-touch { display: none; }
+@media (pointer: coarse) {
+  .cab-touch {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; padding-top: 14px;
+  }
+  .cab-dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 6px; }
+  .cab-dpad button, .cab-fire {
+    font: 16px var(--mono); color: var(--phos); background: rgba(8,20,10,.7);
+    border: 1px solid var(--phos-dim); border-radius: 6px; cursor: pointer;
+    touch-action: none; user-select: none;
+  }
+  .cab-dpad button:active, .cab-fire:active { background: rgba(69,255,107,.2); }
+  .cab-dpad .d-up { grid-column: 2; grid-row: 1; }
+  .cab-dpad .d-left { grid-column: 1; grid-row: 2; }
+  .cab-dpad .d-down { grid-column: 2; grid-row: 2; }
+  .cab-dpad .d-right { grid-column: 3; grid-row: 2; }
+  .cab-fire { width: 92px; height: 92px; border-radius: 50%; letter-spacing: .1em; }
+  /* Pac-Man binds no action, so the shell hides the button for it: make that
+     explicit rather than resting on the [hidden] default, so a later display
+     rule on .cab-fire cannot quietly resurrect a dead control. */
+  .cab-fire[hidden] { display: none; }
+  .cab-keys { display: none; }
+}
+
+/* the page's own shortcuts stay out of the way while a game runs */
+body.arcade-playing { overscroll-behavior: contain; }
+
+/* ============================================================
+   footer
+   ============================================================ */
+footer {
+  border-top: 1px dashed var(--line);
+  padding: 44px 24px 58px; text-align: center;
+  color: var(--ink-dim); font-size: 14.5px;
+  text-shadow: none;
+}
+footer p { margin: 6px 0; }
+footer .keys { color: #3d6b4c; font-size: 13px; }
+footer kbd {
+  border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  border-radius: 3px; padding: 0 5px; font-family: var(--mono);
+  color: var(--phos); background: rgba(8, 20, 10, .5);
+}
+
+/* ============================================================
+   ?instant=1 hook — final-state render, no motion (screenshots, print)
+   ============================================================ */
+html.no-anim { scroll-behavior: auto; }
+html.no-anim .card, html.no-anim [data-fade], html.no-anim .mods li, html.no-anim .skill,
+html.no-anim .skill .bar i {
+  opacity: 1 !important; transform: none !important; transition: none !important;
+}
+html.no-anim .skill .bar i { width: calc(var(--w) * 1%) !important; }
+html.no-anim #crt, html.no-anim .scrollhint, html.no-anim .hiscore,
+html.no-anim .pac-open, html.no-anim .pac-closed { animation: none !important; }
+html.no-anim .ring, html.no-anim .pkt { opacity: 1; }
+html.no-anim .link { stroke-dashoffset: 0; }
+html.no-anim .sec { scroll-margin-top: 46px; }
+
+/* ?only=<id> hook — show one section pinned at the top, unscrolled */
+body.only main > .sec { display: none; }
+body.only main > .sec.target {
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: calc(100svh - 48px);
+  padding-top: 60px; padding-bottom: 30px; border-top: none;
+}
+body.only .hero { min-height: 0; }
+body.only #pacbar, body.only .scrollhint { display: none; }
+body.only #proc { top: 0; transform: none; flex-direction: row; flex-wrap: wrap;
+  justify-content: center; background: rgba(4,7,4,.88); border-bottom: 1px solid var(--line); }
+body.only #proc a { padding: 8px 9px; border-left: none; border-bottom: 2px solid transparent; }
+body.only #proc a b { width: auto; margin-right: 3px; }
+body.only #proc a span { display: none; }
+
+/* ============================================================
+   reduced motion — everything readable, nothing spinning
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  #crt, .pac-open, .pac-closed, .scrollhint, .hiscore,
+  .bootskip, .on .ring, .on .pkt, .on .netcard #net .nd { animation: none !important; }
+  .ring, .pkt { display: none; }
+  .typed-done .mods li, .typed-done [data-fade],
+  .played .skill, .played .card { transition: none !important; }
+}
