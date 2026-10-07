@@ -141,6 +141,7 @@ body.crt-on::after {
 #pacbar {
   position: fixed; top: 0; left: 0; right: 0; height: 34px;
   z-index: 95; pointer-events: none;
+  opacity: 0.75;
 }
 #pacdots {
   position: absolute; top: 14px; bottom: 14px; left: 28px; right: 28px;
@@ -156,7 +157,6 @@ body.crt-on::after {
 #pac {
   position: absolute; top: 0; left: 0; will-change: transform;
   filter: drop-shadow(0 0 7px rgba(255, 217, 74, .85));
-  opacity: 0.9;
 }
 .pac-open, .pac-closed { fill: var(--pac); }
 .pac-open   { animation: chompA .24s linear infinite; }
