@@ -350,11 +350,14 @@ function jumpTo(sec) {
   enterSection(sec);
 }
 
-function finishBoot() {
+/* flashed: true only when a real boot sequence just played out — the CRT
+   power-on flash is the payoff for watching it, so a skipped boot (mid-page
+   landing, small screen, ?instant, reduced motion) does not flash. */
+function finishBoot(flashed) {
   if (bootDone) return;
   bootDone = true;
   document.body.classList.add('crt-off');
-  if (!REDUCED && !INSTANT) document.body.classList.add('crt-on');
+  if (flashed && !REDUCED && !INSTANT) document.body.classList.add('crt-on');
   setTimeout(() => {
     boot.remove();
     document.body.classList.remove('booting');
@@ -404,23 +407,25 @@ window.addEventListener('scroll', () => {
 window.addEventListener('pagehide', saveScrollNow);
 
 /* The boot overlay covers the whole viewport, and on a phone it is mostly a
-   delay in front of the content, so small screens skip it — the power-on flash
-   and the hero typing in as you land on it still happen. ?boot=1 forces it back:
-   a dev hook, and how the suites check the boot at phone widths. */
+   delay in front of the content, so small screens skip it — the hero still
+   types in as you land on it. ?boot=1 forces it back: a dev hook, and how the
+   suites check the boot at phone widths. */
 const SMALL_SCREEN = window.matchMedia('(max-width: 780px)').matches;
 const FORCE_BOOT = /[?&]boot=1/.test(location.search);
 
 function runBoot() {
   /* boot plays only when the visitor starts at the top: fresh visit or a
      reload made while scrolled to the top. Skipped when landing mid-page —
-     scroll restoration, a #fragment deep link, or the ?goto/?only hooks —
-     for reduced motion / ?instant, and on small screens unless ?boot=1. */
-  const deepLink = !!location.hash || /[?&](goto|only)=/.test(location.search);
+     scroll restoration, a #fragment deep link, or the ?goto/?only/?play hooks —
+     for reduced motion / ?instant, and on small screens unless ?boot=1.
+     The CRT power-on flash belongs to the END of the boot sequence, so every
+     skipped path passes flashed=false: no boot, no flash. */
+  const deepLink = !!location.hash || /[?&](goto|only|play)=/.test(location.search);
   const startAtTop = !REDUCED && !INSTANT && !deepLink && savedY < 50 &&
                      (FORCE_BOOT || !SMALL_SCREEN);
-  if (!startAtTop) { finishBoot(); return; }
+  if (!startAtTop) { finishBoot(false); return; }
 
-  const skip = () => finishBoot();
+  const skip = () => finishBoot(true);
   window.addEventListener('keydown', skip, { once: true });
   window.addEventListener('pointerdown', skip, { once: true });
   window.addEventListener('scroll', skip, { once: true, passive: true });
@@ -431,11 +436,11 @@ function runBoot() {
   const lastLine = $('#boot [data-type]');
   const lastDelay = 180 + (lines.length - 1) * 300 + 250;
   setTimeout(() => {
-    typeText(lastLine, lastLine.dataset.trText, 16, () => setTimeout(finishBoot, 480));
+    typeText(lastLine, lastLine.dataset.trText, 16, () => setTimeout(() => finishBoot(true), 480));
   }, lastDelay);
 
   /* hard cap so a stuck timer can never trap the visitor */
-  setTimeout(finishBoot, lastDelay + 4200);
+  setTimeout(() => finishBoot(true), lastDelay + 4200);
 }
 runBoot();
 
