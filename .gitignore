@@ -6,6 +6,9 @@ old/
 # test captures and browser artifacts
 screenshots/
 
+# test suites and sprite-inspection tools (kept locally for development)
+tests/
+
 # dev dependencies (npm install in tests/)
 node_modules/
 package-lock.json
