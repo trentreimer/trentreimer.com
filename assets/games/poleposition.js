@@ -401,8 +401,12 @@
     /* `horizon` is where the terrain stops, not a fixed line: the projection's
      * vanishing point is the middle of the canvas, but the road can drop away
      * below it or climb above it, and sky painted past the ground showed through
-     * the translucent terrain as bands and left the glow floating over a valley. */
+     * the translucent terrain as bands and left the glow floating over a valley.
+     * It is snapped down to a whole row: the terrain's top is a fractional
+     * projected y, and a glow ending on that same fractional row gets blended
+     * by the canvas into the hill's first pixel, painting sky on the ground. */
     function drawSky(ctx, horizon) {
+      horizon = Math.floor(horizon);
       ctx.globalAlpha = 1;
       ctx.fillStyle = COL.bg;
       ctx.fillRect(0, 0, W, H);
