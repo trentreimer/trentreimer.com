@@ -141,7 +141,6 @@ body.crt-on::after {
 #pacbar {
   position: fixed; top: 0; left: 0; right: 0; height: 34px;
   z-index: 95; pointer-events: none;
-  opacity: 0.75;
 }
 #pacdots {
   position: absolute; top: 14px; bottom: 14px; left: 28px; right: 28px;
