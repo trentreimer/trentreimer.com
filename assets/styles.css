@@ -152,7 +152,7 @@ body.crt-on::after {
 #pac {
   position: absolute; top: 0; left: 0; will-change: transform;
   filter: drop-shadow(0 0 7px rgba(255, 217, 74, .85));
-  opacity: 0.8;
+  opacity: 0.9;
 }
 .pac-open, .pac-closed { fill: var(--pac); }
 .pac-open   { animation: chompA .24s linear infinite; }
