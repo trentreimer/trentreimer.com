@@ -309,7 +309,7 @@ html.js .played .card {
 .tbar i.d1 { background: var(--red); }
 .tbar i.d2 { background: var(--amber); }
 .tbar i.d3 { background: var(--phos); }
-.tbar span { margin-left: 6px; }
+.tbar > span { margin-left: 6px; }
 .tbar.bot { border-bottom: none; border-top: 1px solid var(--line); justify-content: flex-end; }
 .tbody { padding: 16px 18px; display: flex; flex-direction: column; gap: 9px; }
 
@@ -544,8 +544,24 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
 .hint { color: #3d6b4c; font-size: 13px; margin: 14px 2px 0; text-shadow: none; }
 
 @media (max-width: 780px) {
-  .skill { grid-template-columns: 1fr 1fr minmax(90px, 10em) 2.2em; }
-  .skill .perm, .skill .who { display: none; }
+  /* On a phone the skill itself is the point, so the row drops the ls columns
+     that carry no weight (permissions, the owner) and leads with the GROUP —
+     dev, dba, ai, sec, perf, web — then the skill, which now gets the width of
+     the row instead of a four-character sliver ("Lin…"). The meter moves to a
+     second line rather than competing with the words: it still reads as a stat
+     bar, and the skill names stop being cut off. */
+  .skill {
+    grid-template-columns: auto minmax(0, 1fr) 2.1em;
+    grid-template-areas: "who label label" "bar bar pct";
+    gap: 4px 8px;
+  }
+  .skill .who   { grid-area: who; }
+  .skill .label { grid-area: label; white-space: normal; overflow: visible; }
+  .skill .bar   { grid-area: bar; }
+  .skill .pct   { grid-area: pct; }
+  .skill .perm, .skill .owner { display: none; }
+  .skill .who { opacity: 1; }          /* a phone needs the contrast */
+  .tbar-sub { display: none; }         /* the window title is just "skills" */
 }
 
 /* ============================================================
