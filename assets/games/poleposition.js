@@ -36,7 +36,6 @@
     const DRAW_DIST = 170;        // segments drawn ahead of the car
     const CAM_H = 1000;           // camera height above the road
     const CAM_D = 1 / Math.tan((100 / 2) * Math.PI / 180);   // 100 degree field of view
-    const PLAYER_Z = CAM_H * CAM_D;
     const MAX_SPEED = SEG_LEN / 30;      // world units per ms at full throttle
     const ACCEL = MAX_SPEED / 4200;      // throttle
     const BRAKE = MAX_SPEED / 900;       // deliberate braking
@@ -51,6 +50,11 @@
     const STEER = 0.0020;                // road-offsets per ms at full speed
     const CAR_HALF_W = 0.15;             // half a car's width, in road offsets
     const CAR_HALF_L = SEG_LEN * 0.55;   // half a car's length, in world units
+    /* The player's car is drawn glued to a fixed row near the bottom of the
+     * frame rather than projected from its world z, so the contact test works
+     * in that same screen space: these are the rows its sprite box spans. */
+    const PLAYER_SCREEN_Y = H - 26;      // row the wheels sit on (drawPlayer)
+    const PLAYER_SCREEN_HH = 26;         // body half-height
     const TRAFFIC = 26;                  // cars out on the track
     const CAR_MIN = MAX_SPEED * 0.34;
     const CAR_MAX = MAX_SPEED * 0.70;
@@ -183,6 +187,39 @@
     }
 
     /* ============================== physics ============================ */
+    /* Traffic, where the draw pass will put it: the same interpolation between
+     * the two projected ends of the car's segment, so the contact test and the
+     * animation can never disagree about where a sprite is. `s1`/`s2` are the
+     * projected segment ends, `pct` the car's place between them. */
+    function carScreen(s1, s2, pct, offset) {
+      const x = s1.x + (s2.x - s1.x) * pct + offset * (s1.w + (s2.w - s1.w) * pct);
+      const y = s1.y + (s2.y - s1.y) * pct;
+      const w = s1.w + (s2.w - s1.w) * pct;
+      return { x: x, y: y, w: w, hh: CAR_HALF_W * w * 0.8 };
+    }
+    /* The same box for a traffic car at a signed distance ahead of us. The road
+     * ends are projected from the camera the draw pass uses and carry the road's
+     * real height, so a crest or a dip moves the sprite exactly as it is drawn. */
+    function carSpriteBox(car, dz) {
+      const base = segmentAt(position);
+      const basePct = (position % SEG_LEN) / SEG_LEN;
+      const camY = base.p1.world.y + (base.p2.world.y - base.p1.world.y) * basePct + CAM_H;
+      const seg = segmentAt(car.z);
+      const pct = (car.z % SEG_LEN) / SEG_LEN;
+      const p1z = Math.max(1, dz - pct * SEG_LEN), p2z = Math.max(1, dz + (1 - pct) * SEG_LEN);
+      const s1 = { x: 0, y: H / 2 - (CAM_D / p1z) * (seg.p1.world.y - camY) * H / 2,
+        w: (CAM_D / p1z) * ROAD_W * W / 2 };
+      const s2 = { x: 0, y: H / 2 - (CAM_D / p2z) * (seg.p2.world.y - camY) * H / 2,
+        w: (CAM_D / p2z) * ROAD_W * W / 2 };
+      return carScreen(s1, s2, pct, 0);
+    }
+    /* True when the traffic sprite box has reached ours: the moment the edges
+     * meet is the moment contact is called, whatever the hill is doing. */
+    function carTouchesPlayer(car, dz) {
+      if (dz <= CAM_D) return false;                 // behind the camera, not drawn
+      const box = carSpriteBox(car, dz);
+      return box.y > PLAYER_SCREEN_Y - PLAYER_SCREEN_HH && box.y - box.hh < PLAYER_SCREEN_Y;
+    }
     /* Traffic: drive it, score the passes, and watch for contact. Its own
      * function because the wreck path needs it too — a stopped player must not
      * freeze the rest of the field. */
@@ -207,15 +244,19 @@
           blip(660, 0.05);                         // discrete event: overtake
         }
         /* --- contact ---------------------------------------------------- *
-         * Two cars never occupy the same piece of road. When the boxes overlap
-         * they are pushed apart: the other car first, then us for whatever the
-         * verge would not let it take, and if we are against the verge as well
-         * we drop back along the road instead. The closing speed decides
+         * Two cars never share the same patch of screen. The player's sprite
+         * is glued near the bottom of the frame rather than projected from its
+         * world z, and the closer traffic gets to the camera the lower it is
+         * drawn, so a world-z gap would let a car drive right through the
+         * player before contact came. The test is therefore in the draw pass's
+         * own screen space: when the traffic sprite reaches the player's box
+         * they are pushed apart — the other car first, then us for whatever
+         * the verge would not let it take, and if we are against the verge as
+         * well we drop back along the road instead. The closing speed decides
          * whether it is a shove or a crash. */
         const gapX = car.offset - playerX;
         const overlapX = CAR_HALF_W * 2 - Math.abs(gapX);
-        const overlapZ = CAR_HALF_L * 2 - Math.abs(after);
-        if (overlapX <= 0 || overlapZ <= 0) continue;
+        if (overlapX <= 0 || !carTouchesPlayer(car, after)) continue;
         const away = gapX >= 0 ? 1 : -1;           // which side the car is on
         if (crashT > 0) {
           /* We are stopped in the wreck and the controls are dead, but the rest
@@ -493,10 +534,8 @@
         }
         for (let i = 0; i < seg.cars.length; i++) {            // traffic
           const car = seg.cars[i];
-          const pct = (car.z % SEG_LEN) / SEG_LEN;
-          const sx = s1.x + (s2.x - s1.x) * pct + car.offset * (s1.w + (s2.w - s1.w) * pct);
-          const sy = s1.y + (s2.y - s1.y) * pct;
-          drawCar(ctx, sx, sy, s1.w + (s2.w - s1.w) * pct, car.colour);
+          const box = carScreen(s1, s2, (car.z % SEG_LEN) / SEG_LEN, car.offset);
+          drawCar(ctx, box.x, box.y, box.w, car.colour);
         }
         ctx.restore();
         ctx.globalAlpha = 1;
@@ -515,8 +554,8 @@
       const offRoad = Math.abs(playerX) > 1;
       const bounce = offRoad ? Math.sin(bounceT / 26) * 2.2 : 0;
       const jolt = shakeT > 0 ? (Math.sin(shakeT * 1.7) * 3 * (shakeT / SHAKE)) : 0;
-      const x = W / 2 + jolt, y = H - 26 + bounce;
-      const hw = 34, hh = 26, hoop = 7;
+      const x = W / 2 + jolt, y = PLAYER_SCREEN_Y + bounce;
+      const hw = 34, hh = PLAYER_SCREEN_HH, hoop = 7;
       const bw = hw * 0.76;                       // body half-width
       const tyreW = hw - bw, tyreH = (hh + hoop) * 0.53;
       ctx.save();
@@ -668,7 +707,15 @@
           /* contacts, split by kind: a shove costs no life, a crash costs one */
           bumps: bumps, crashes: crashes, crashing: crashT > 0,
           trackLength: trackLength, segments: segments.length,
-          cars: cars.map(function (c) { return { z: c.z, offset: c.offset, speed: c.speed }; }),
+          /* each car carries the sprite box the contact test uses, so the
+           * harness can prove no two sprites are left sharing screen space */
+          cars: cars.map(function (c) {
+            const dz = zdiff(c.z, position);
+            const box = dz > CAM_D ? carSpriteBox(c, dz) : null;
+            return { z: c.z, offset: c.offset, speed: c.speed,
+              sy: box ? box.y : null, hh: box ? box.hh : null };
+          }),
+          playerTop: PLAYER_SCREEN_Y - PLAYER_SCREEN_HH, playerBottom: PLAYER_SCREEN_Y,
           curve: segmentAt(position).curve
         };
       }
