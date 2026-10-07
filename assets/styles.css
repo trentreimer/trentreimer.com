@@ -108,6 +108,10 @@ html.js body.crt-off #boot { opacity: 0; }
 }
 .bline { opacity: 0; transform: translateY(5px); }
 .bline.show { opacity: 1; transform: none; transition: .16s ease; }
+/* the short boot lines are for narrow screens only, and the long ones only for
+   wide — both are in the markup so the sequence can simply reveal whichever
+   set the media query left visible */
+.bline.narrow { display: none; }
 .bline i { color: var(--phos); font-style: normal; text-shadow: 0 0 8px rgba(69,255,107,.7); }
 .bline em { font-style: normal; color: #3d6b4c; font-size: .85em; }
 .bline .ps1 { margin-right: 6px; }
@@ -563,6 +567,16 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
   .skill .perm, .skill .owner { display: none; }
   .skill .who { opacity: 1; }          /* a phone needs the contrast */
   .tbar-sub { display: none; }         /* the window title is just "skills" */
+
+  /* Boot screen on a phone: the long BIOS lines have to wrap at this width,
+     which reads as a mess, so swap them for the short set and give the box a
+     phone-sized type scale. The command line stays whole — it is the point of
+     the sequence — and at 280px on the smallest phones in use it still fits
+     inside the box without wrapping. */
+  .bline.wide { display: none; }
+  .bline.narrow { display: block; }
+  .bootbox { width: min(640px, calc(100vw - 16px)); font-size: 12px; line-height: 2.2; }
+  .bootskip { font-size: 10px; letter-spacing: .2em; }
 }
 
 /* ============================================================

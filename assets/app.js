@@ -406,23 +406,21 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 window.addEventListener('pagehide', saveScrollNow);
 
-/* The boot overlay covers the whole viewport, and on a phone it is mostly a
-   delay in front of the content, so small screens skip it — the hero still
-   types in as you land on it. ?boot=1 forces it back: a dev hook, and how the
-   suites check the boot at phone widths. */
-const SMALL_SCREEN = window.matchMedia('(max-width: 780px)').matches;
-const FORCE_BOOT = /[?&]boot=1/.test(location.search);
+/* ?boot=0 is a dev hook that skips the boot overlay, so the suites can exercise
+   the content-first path on a desktop-width page. Small screens do NOT skip it:
+   they run a shortened set of lines instead. */
+const SKIP_BOOT = /[?&]boot=0/.test(location.search);
 
 function runBoot() {
   /* boot plays only when the visitor starts at the top: fresh visit or a
      reload made while scrolled to the top. Skipped when landing mid-page —
      scroll restoration, a #fragment deep link, or the ?goto/?only/?play hooks —
-     for reduced motion / ?instant, and on small screens unless ?boot=1.
+     for reduced motion / ?instant, and with ?boot=0. Small screens run it too,
+     on a shortened set of lines (see the boot rules in the stylesheet).
      The CRT power-on flash belongs to the END of the boot sequence, so every
      skipped path passes flashed=false: no boot, no flash. */
   const deepLink = !!location.hash || /[?&](goto|only|play)=/.test(location.search);
-  const startAtTop = !REDUCED && !INSTANT && !deepLink && savedY < 50 &&
-                     (FORCE_BOOT || !SMALL_SCREEN);
+  const startAtTop = !REDUCED && !INSTANT && !deepLink && !SKIP_BOOT && savedY < 50;
   if (!startAtTop) { finishBoot(false); return; }
 
   const skip = () => finishBoot(true);

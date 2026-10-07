@@ -18,13 +18,21 @@
   <!-- ============ boot overlay ============ -->
   <div id="boot" aria-hidden="true">
     <div class="bootbox">
-      <div class="bline">REIMER BIOS v2.0 — power on self test</div>
-      <div class="bline">memory ................ 640K <i>ok</i> <em>(should be enough for anybody)</em></div>
-      <div class="bline">modules: [net] [ai] [sec] [retro] ....... <i>ok</i></div>
-      <div class="bline">mounting /dev/creativity .............. <i>ok</i></div>
+      <!-- Narrow screens get the short sequence: `wide` only rows are hidden
+           and `narrow` only rows shown, so a phone still gets a boot screen
+           without the lines that have to wrap to fit (see the 780px block in
+           the stylesheet). A line must not carry both classes. -->
+      <div class="bline wide">REIMER BIOS v2.0 — power on self test</div>
+      <div class="bline wide">memory ................ 640K <i>ok</i> <em>(should be enough for anybody)</em></div>
+      <div class="bline wide">modules: [net] [ai] [sec] [retro] ....... <i>ok</i></div>
+      <div class="bline narrow">REIMER BIOS v2.0</div>
+      <div class="bline narrow">memory ... 640K <i>ok</i></div>
+      <div class="bline narrow">modules ......... <i>ok</i></div>
+      <div class="bline wide">mounting /dev/creativity .............. <i>ok</i></div>
+      <div class="bline narrow">mounting /dev ......... <i>ok</i></div>
       <div class="bline cmdline"><span class="ps1">$</span> <span class="t" data-type>./launch trentreimer.com --mode one-page</span></div>
     </div>
-    <div class="bootskip">click or press any key to skip</div>
+    <div class="bootskip">tap or press any key to skip</div>
   </div>
 
   <!-- ============ CRT overlays ============ -->
