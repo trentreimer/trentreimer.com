@@ -397,16 +397,14 @@
       ctx.closePath(); ctx.fill();
     }
     /* Sky above the horizon: a few flat bands rather than a gradient, to keep
-     * the pixel feel, with a glow that marks where the sun would be. */
+     * the pixel feel. */
     /* `horizon` is where the terrain stops, not a fixed line: the projection's
      * vanishing point is the middle of the canvas, but the road can drop away
      * below it or climb above it, and sky painted past the ground showed through
-     * the translucent terrain as bands and left the glow floating over a valley.
-     * It is snapped down to a whole row: the terrain's top is a fractional
-     * projected y, and a glow ending on that same fractional row gets blended
-     * by the canvas into the hill's first pixel, painting sky on the ground. */
+     * the translucent terrain as bands. It stays fractional so the last band
+     * tracks the terrain's top without stepping a whole pixel at a time; the
+     * sub-pixel blend that leaves on the seam is faint enough to live with. */
     function drawSky(ctx, horizon) {
-      horizon = Math.floor(horizon);
       ctx.globalAlpha = 1;
       ctx.fillStyle = COL.bg;
       ctx.fillRect(0, 0, W, H);
@@ -419,18 +417,13 @@
         ctx.fillStyle = COL.phos;
         ctx.fillRect(0, y, W, Math.min(horizon - y, horizon / bands + 1));
       }
-      ctx.globalAlpha = 0.55;                         // horizon glow
-      ctx.fillStyle = COL.phos;
-      ctx.fillRect(0, horizon - 1, W, 1);
-      ctx.globalAlpha = 0.14;
-      ctx.fillRect(0, horizon - 6, W, 5);
       ctx.globalAlpha = 1;
     }
     /* `fillTo` is where the last drawn segment ended. A crest hides the segments
      * behind it and the loop skips them, which would leave a gap between the last
-     * one drawn and the next — and the sky, with its horizon line, shows through
-     * it as green streaks across the hill. Carrying the verge down to that point
-     * fills the gap with ground, which is what is really there. */
+     * one drawn and the next — and the sky shows through it as green streaks
+     * across the hill. Carrying the verge down to that point fills the gap with
+     * ground, which is what is really there. */
     function drawSegment(ctx, seg, n, fillTo) {
       const p1 = seg.p1.screen, p2 = seg.p2.screen;
       const fog = 1 - Math.pow(n / DRAW_DIST, 1.7) * 0.92;
