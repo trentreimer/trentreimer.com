@@ -47,8 +47,8 @@
     const BONUS_STEP = 100;     // bonus lost per tick
     const PTS_JUMP = 100, PTS_BARREL = 300, PTS_FIRE = 500;   // scoring table
     const SPAWN_X = 24;                        // Mario's start x on the floor
-    const DK_X = 40, DK_Y = 124;               // DK's feet (top-left perch)
-    const PAULINE_X = 232, PAULINE_Y = 150;    // Pauline's feet (top-right perch)
+    const DK_X = 40, DK_Y = 74;                // DK's feet (top-left perch)
+    const PAULINE_X = 232, PAULINE_Y = 86;     // Pauline's feet (top-right perch)
     const WIN_X = 12;                          // |dx| to Pauline that clears it
     const HIT_DX = 10, HIT_LOW = -8, HIT_HIGH = 14;  // contact window (dy bounds)
     const SWAT_DX = 17, SWAT_DY = 16;          // hammer reach around Mario
@@ -60,12 +60,12 @@
      * back the other way below. G3 is split by the gap at x=118..138. */
     const SEGS = [
       { x0: 0, y0: 302, x1: 256, y1: 290, g: 0 },    // G0  floor
-      { x0: 0, y0: 272, x1: 256, y1: 284, g: 1 },    // G1
-      { x0: 0, y0: 246, x1: 256, y1: 234, g: 2 },    // G2
-      { x0: 0, y0: 218, x1: 118, y1: 224, g: 3 },    // G3a left half
-      { x0: 138, y0: 225, x1: 256, y1: 230, g: 3 },  // G3b right half
-      { x0: 0, y0: 192, x1: 256, y1: 180, g: 4 },    // G4
-      { x0: 0, y0: 164, x1: 256, y1: 176, g: 5 }     // G5  top
+      { x0: 0, y0: 252, x1: 256, y1: 264, g: 1 },    // G1
+      { x0: 0, y0: 226, x1: 256, y1: 214, g: 2 },    // G2
+      { x0: 0, y0: 176, x1: 118, y1: 182, g: 3 },    // G3a left half
+      { x0: 138, y0: 183, x1: 256, y1: 188, g: 3 },  // G3b right half
+      { x0: 0, y0: 150, x1: 256, y1: 138, g: 4 },    // G4
+      { x0: 0, y0: 100, x1: 256, y1: 112, g: 5 }     // G5  top
     ];
     const FLOOR = 0, TOP = 6;                  // SEGS indices
 
