@@ -30,7 +30,11 @@ const GAMES = [
   { key: 'invaders', name: 'SPACE INVADERS', action: 'FIRE',
     keys: '\u2190 \u2192 move \u00b7 space fire' },
   { key: 'donkeykong', name: 'DONKEY KONG', action: 'JUMP',
-    keys: '\u2190 \u2192 walk \u00b7 \u2191 \u2193 climb \u00b7 space jump' }
+    keys: '\u2190 \u2192 walk \u00b7 \u2191 \u2193 climb \u00b7 space jump' },
+  /* Pole Position steers and accelerates, so its pad shows two arrows and GO
+   * rather than a full cross with a dead pair on it. */
+  { key: 'poleposition', name: 'POLE POSITION', action: 'GO', dpad: ['left', 'right'],
+    keys: '\u2190 \u2192 steer \u00b7 space accelerate' }
 ];
 const PALETTE = {
   bg: '#040704', phos: '#45ff6b', dim: '#2f9a4d', bright: '#c8ffdb',
@@ -60,6 +64,8 @@ CAB.innerHTML =
     '<span class="cab-stat">HI <b id="cab-hi">0</b></span>' +
     '<span class="cab-stat cab-lives" id="cab-lives-wrap">LIVES <b id="cab-lives">3</b></span>' +
     '<span class="cab-stat" id="cab-level-wrap">LVL <b id="cab-level">1</b></span>' +
+    '<label class="cab-pick-wrap"><span class="cab-pick-label">GAME</span>' +
+      '<select class="cab-pick" id="cab-pick" aria-label="Choose a game"></select></label>' +
   '</div>' +
   '<div class="cab-screen"><canvas id="cab-canvas" width="300" height="300" tabindex="0" ' +
     'aria-label="Arcade screen"></canvas></div>' +
@@ -90,8 +96,15 @@ const el = {
   keys: document.getElementById('cab-keys'),
   start: document.getElementById('cab-start'),
   pause: document.getElementById('cab-pause'),
-  fire: document.getElementById('cab-fire')
+  fire: document.getElementById('cab-fire'),
+  pick: document.getElementById('cab-pick'),
+  dpad: CAB.querySelector('.cab-dpad')
 };
+/* The selector lists every cabinet by name, so the choice is deliberate rather
+ * than a surprise. It shows the game in hand and swaps to another on change. */
+el.pick.innerHTML = GAMES.map((g, i) =>
+  '<option value="' + i + '">' + g.name + '</option>').join('');
+el.pick.addEventListener('change', () => { select(parseInt(el.pick.value, 10), true); });
 
 /* ---------- state ---------- */
 let index = pickIndex();
@@ -127,12 +140,26 @@ function loadScript(src) {
 /* The canvas is scaled to fill the cabinet's screen area, so every cartridge
    reads at a comfortable size whatever its native resolution — Pac-Man's maze
    is only 304x256 natively and would otherwise sit small beside the others.
-   `image-rendering: pixelated` keeps the upscaled pixels crisp. */
+   `image-rendering: pixelated` keeps the upscaled pixels crisp.
+ *
+ * The height allowance is the viewport MINUS the cabinet's own chrome — the
+ * HUD, the controls row, its padding and its borders — because a canvas sized
+ * to a flat share of the window pushes that chrome off the edges: the frame
+ * gets cut off at the bottom. The chrome is measured rather than assumed, since
+ * it grows when the HUD wraps on a narrow screen. The width is whatever the
+ * cabinet has, which for this section is a wider measure than the rest of the
+ * page. Whichever runs out first wins, so nothing overflows. */
 function fitScreen() {
   if (!game) return;
   const screen = canvas.parentElement;
   const avail = (screen && screen.clientWidth) || CAB.clientWidth || game.w;
-  const maxH = Math.max(220, Math.round((window.innerHeight || 800) * 0.54));
+  /* measured from the CARD, not the cabinet: the frame the visitor sees is the
+     card, and its padding and border sit outside the cabinet's own chrome */
+  const frame = CAB.closest('.card') || CAB;
+  const chrome = Math.max(0,
+    frame.getBoundingClientRect().height - canvas.getBoundingClientRect().height);
+  const room = (window.innerHeight || 800) - chrome - 12;   // 12px of breathing space
+  const maxH = Math.max(200, Math.round(room));
   const scale = Math.min(avail / game.w, maxH / game.h);
   canvas.style.width = Math.max(1, Math.round(game.w * scale)) + 'px';
   canvas.style.height = Math.max(1, Math.round(game.h * scale)) + 'px';
@@ -172,7 +199,7 @@ function render() {
   if ((game.score || 0) > hi) { hi = game.score; writeHi(); }
   game.draw(ctx);
   const st = game.state;
-  if (st === 'ready') banner(['INSERT COIN', 'press START \u2014 a different game is dealt each visit']);
+  if (st === 'ready') banner(['INSERT COIN', 'press START \u2014 or pick a game above']);
   else if (st === 'paused') banner(['PAUSED', 'press P or PAUSE to resume']);
   else if (st === 'over') banner(['GAME OVER', game.message || 'press R or START to play again']);
   else if (st === 'win') banner(['YOU WIN', game.message || 'press R or START for another run']);
@@ -227,39 +254,60 @@ function pauseToggle() {
   }
 }
 
+/* Loading a cartridge is asynchronous, so two selections can overlap — the
+ * rotation picks one as the visitor arrives, and they may pick another before
+ * it lands (the selector makes that easy). Each call takes a token and the
+ * overtaken one bails after its await, otherwise it would build its game on top
+ * of the newer selection and read the wrong entry out of GAMES. */
+let selectSeq = 0;
+
 async function select(i, autostart) {
+  const token = ++selectSeq;
   index = ((i % GAMES.length) + GAMES.length) % GAMES.length;
+  const picked = GAMES[index];               // what THIS call is loading
   releaseKeys();
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
   game = null;
   readHi();
-  el.title.textContent = GAMES[index].name;
+  el.title.textContent = picked.name;
   el.score.textContent = '0';
   el.hi.textContent = String(hi);
-  el.keys.textContent = GAMES[index].keys;
-  /* the round button says what it does in THIS game (FIRE / JUMP / DROP), and
-     Pac-Man has no action to bind, so it goes away rather than sitting there
-     dead. The touch handlers were bound by direction name when the shell was
-     built, so hiding it cannot leave a half-wired control behind. */
-  const action = GAMES[index].action;
+  el.keys.textContent = picked.keys;
+  /* The pad is cut to the game: the round button says what it does here
+     (FIRE / JUMP / DROP / GO), Pac-Man has no action to bind so it goes away
+     rather than sitting there dead, and a game that only steers and accelerates
+     shows two arrows instead of a cross with a dead pair on it. The handlers
+     were bound by direction name when the shell was built, so hiding a button
+     cannot leave a half-wired control behind. */
+  const action = picked.action;
   el.fire.textContent = action || '';
   el.fire.hidden = !action;
   el.fire.setAttribute('aria-label', action ? action.toLowerCase() : 'action');
+  const dirs = picked.dpad || ['up', 'left', 'down', 'right'];
+  Array.prototype.forEach.call(el.dpad.querySelectorAll('button'), b => {
+    b.hidden = dirs.indexOf(b.dataset.dir) === -1;
+  });
+  /* with the cross cut down to a pair, pull them together so the pad reads as
+     one control instead of two buttons with a hole between them */
+  el.dpad.classList.toggle('pair', dirs.length === 2);
+  el.pick.value = String(index);          // the selector always shows the game in hand
   try {
-    await loadScript('assets/games/' + GAMES[index].key + '.js');
+    await loadScript('assets/games/' + picked.key + '.js');
   } catch (err) {
+    if (token !== selectSeq) return;         // someone else owns the cabinet now
     banner(['CABINET OUT OF ORDER', 'could not load the game — check the console']);
     return;
   }
-  const factory = window.__trGames && window.__trGames[GAMES[index].key];
+  if (token !== selectSeq) return;           // overtaken while loading: stand down
+  const factory = window.__trGames && window.__trGames[picked.key];
   if (typeof factory !== 'function') {
-    banner(['CABINET OUT OF ORDER', 'no game registered under ' + GAMES[index].key]);
+    banner(['CABINET OUT OF ORDER', 'no game registered under ' + picked.key]);
     return;
   }
   game = factory(api);
   canvas.width = game.w;
   canvas.height = game.h;
-  canvas.setAttribute('aria-label', GAMES[index].name + ' screen');
+  canvas.setAttribute('aria-label', picked.name + ' screen');
   fitScreen();
   game.state = 'ready';
   render();

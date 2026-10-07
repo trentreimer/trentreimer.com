@@ -607,7 +607,12 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
    style it. Nothing here loads a game — the scripts arrive only when the
    visitor scrolls this far.
    ============================================================ */
-.arcade .wrap { position: relative; }
+/* The arcade is the one section that earns the extra width: a cabinet wants the
+   biggest screen it can get. Everything else keeps its reading measure.
+   `width: 100%` is load-bearing — .wrap carries `margin: 0 auto`, and inside the
+   column flex that every .sec is, auto margins stop the item stretching, so it
+   shrink-to-fits its content and a max-width alone never applies. */
+.arcade .wrap { position: relative; width: 100%; max-width: 1600px; }
 
 .arcade-slot {
   padding: 16px;
@@ -633,6 +638,18 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
 .cab-stat { letter-spacing: .1em; }
 .cab-stat b { color: var(--phos-bright); font-weight: normal; margin-left: 4px; }
 .cab-stat.cab-lives b { color: var(--red); letter-spacing: .18em; }
+/* the game selector: same monospace, border and radius as the buttons beside it.
+   The closed control is ours to style; the open list is drawn by the OS. */
+.cab-pick-wrap { display: inline-flex; align-items: baseline; gap: 6px; margin-left: auto; }
+.cab-pick-label { letter-spacing: .1em; color: var(--phos-dim); }
+.cab-pick {
+  font: 14px var(--mono); letter-spacing: .1em;
+  color: var(--amber); background: rgba(8, 20, 10, .7);
+  border: 1px solid var(--line-strong); border-radius: 4px;
+  padding: 2px 6px; cursor: pointer; max-width: 44vw;
+}
+.cab-pick:hover, .cab-pick:focus-visible { border-color: var(--phos-dim); }
+.cab-pick:focus-visible { outline: 1px solid var(--phos); outline-offset: 1px; }
 
 /* the screen itself */
 .cab-screen {
@@ -689,6 +706,10 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
   .cab-dpad .d-left { grid-column: 1; grid-row: 2; }
   .cab-dpad .d-down { grid-column: 2; grid-row: 2; }
   .cab-dpad .d-right { grid-column: 3; grid-row: 2; }
+  /* a game that only steers (Pole Position) gets the pair pulled together */
+  .cab-dpad.pair { grid-template-columns: repeat(2, 46px); }
+  .cab-dpad.pair .d-left  { grid-column: 1; grid-row: 2; }
+  .cab-dpad.pair .d-right { grid-column: 2; grid-row: 2; }
   .cab-fire { width: 92px; height: 92px; border-radius: 50%; letter-spacing: .1em; }
   /* Pac-Man binds no action, so the shell hides the button for it: make that
      explicit rather than resting on the [hidden] default, so a later display
