@@ -21,6 +21,7 @@
   --line-strong:  #1e5c33;
   --mono: 'Share Tech Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --disp: 'VT323', 'Share Tech Mono', ui-monospace, monospace;
+  --proc-gutter: 150px;   /* left clearance for the fixed process list */
 }
 
 * { box-sizing: border-box; }
@@ -212,6 +213,20 @@ body.crt-on::after {
   #proc a span { display: none; }
   #proc a.active { border-bottom-color: var(--phos); background: none; }
   #sndbtn { bottom: 12px; right: 12px; }
+}
+
+/* While the rail is vertical, no section may slide beneath it. Capping each
+   measure symmetrically keeps the .wrap viewport-centred and leaves at least
+   --proc-gutter on both sides; the cabinet's wide 1600px cap survives intact
+   on screens that can afford it. `?only` turns the rail into a top bar at
+   every width, so it keeps the plain measure. */
+@media (min-width: 901px) {
+  body:not(.only) .wrap {
+    max-width: min(1100px, calc(100% - 2 * var(--proc-gutter)));
+  }
+  body:not(.only) .arcade .wrap {
+    max-width: min(1600px, calc(100% - 2 * var(--proc-gutter)));
+  }
 }
 
 /* ============================================================
