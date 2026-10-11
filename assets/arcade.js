@@ -199,10 +199,11 @@ function render() {
   if ((game.score || 0) > hi) { hi = game.score; writeHi(); }
   game.draw(ctx);
   const st = game.state;
-  if (st === 'ready') banner(['INSERT COIN', 'press START \u2014 or pick a game above']);
+  if (st === 'ready') banner(['INSERT COIN', 'click screen \u2014 or press START']);
   else if (st === 'paused') banner(['PAUSED', 'press P or PAUSE to resume']);
   else if (st === 'over') banner(['GAME OVER', game.message || 'press R or START to play again']);
   else if (st === 'win') banner(['YOU WIN', game.message || 'press R or START for another run']);
+  canvas.classList.toggle('can-start', st === 'ready' || st === 'over' || st === 'win');
   refreshHud();
   document.body.classList.toggle('arcade-playing', st === 'playing');
 }
@@ -317,6 +318,9 @@ async function select(i, autostart) {
 /* ---------- controls ---------- */
 el.start.addEventListener('click', start);
 el.pause.addEventListener('click', pauseToggle);
+canvas.addEventListener('click', () => {
+  if (game && (game.state === 'ready' || game.state === 'over' || game.state === 'win')) start();
+});
 
 /* keyboard: the game keys are captured before the page's own shortcuts see them */
 const KEYMAP = {

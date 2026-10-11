@@ -684,6 +684,7 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
   outline: none;
 }
 .cab-screen canvas:focus-visible { border-color: var(--phos); }
+.cab-screen canvas.can-start { cursor: pointer; }
 
 /* controls */
 .cab-controls {
