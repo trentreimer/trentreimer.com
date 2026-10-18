@@ -794,3 +794,54 @@ body.only #proc a span { display: none; }
   .typed-done .mods li, .typed-done [data-fade],
   .played .skill, .played .card { transition: none !important; }
 }
+
+/* ============================================================
+   asteroids ship cursor — pointer becomes the little triangle,
+   nose pointing where you last travelled, flame while moving.
+   JS adds body.ship-cursor only on fine pointers with motion
+   allowed, so the rest keep native cursors untouched.
+   ============================================================ */
+body.ship-cursor, body.ship-cursor * { cursor: none !important; }
+/* editing fields keep the real caret cursor; the ship plays dead over them */
+body.ship-cursor input, body.ship-cursor textarea { cursor: text !important; }
+/* scrollbars keep the regular cursor while the pointer rides them */
+body.ship-cursor.ship-bar, body.ship-cursor.ship-bar * { cursor: auto !important; }
+
+#ship {
+  position: fixed; left: 0; top: 0;
+  width: 40px; height: 32px; margin: -16px 0 0 -20px;
+  z-index: 101;                /* above the fixed chrome (nav / sound toggle at 100) */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s ease;
+  will-change: transform;
+}
+body.ship-cursor.ship-on #ship { opacity: 1; }
+/* the ship powers down while the boot screen is up, while a cabinet game
+   owns the pointer, and over editing fields or a scrollbar (native cursor
+   takes over) */
+body.booting #ship, body.arcade-playing #ship,
+body.ship-cursor.ship-off #ship { opacity: 0; }
+#ship .ship-hull {
+  fill: rgba(4, 7, 4, .6);
+  stroke: #fff; stroke-width: 1.5;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, .65));
+}
+/* over a clickable surface the hull fills solid, standing in for the pointer hand */
+body.ship-cursor.ship-pointer #ship .ship-hull { fill: #fff; }
+#ship .ship-flame {
+  fill: none; stroke: var(--amber); stroke-width: 1.5; stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px rgba(255, 176, 0, .7));
+  opacity: 0;
+}
+/* burners light only while thrusting — two-frame flicker like the original */
+body.ship-cursor.ship-thrust #ship .ship-flame { opacity: 1; }
+body.ship-cursor.ship-thrust #ship .ship-flame.f-big {
+  animation: ship-flame .12s steps(1) infinite;
+}
+
+@keyframes ship-flame {
+  0% { visibility: visible; }
+  50% { visibility: hidden; }
+}

@@ -797,6 +797,135 @@ window.addEventListener('keydown', e => {
 });
 
 /* ============================================================
+   asteroids ship cursor — the pointer becomes the little vector
+   ship: the nose points along the direction of travel and the
+   twin burner flames flicker while thrusting. Position and
+   heading track the pointer exactly so targets stay precise.
+   Enabled only on fine pointers with motion allowed — touch
+   devices, reduced motion and ?instant keep the native cursor.
+   ============================================================ */
+(function shipCursor() {
+  const shipEl = $('#ship');
+  if (!shipEl) return;
+  if (REDUCED || INSTANT) return;
+  if (!window.PointerEvent) return;
+  if (!window.matchMedia('(pointer: fine)').matches) return;
+
+  const body = document.body;
+  body.classList.add('ship-cursor');   /* native cursors hand over to the ship */
+
+  const THRUST_LINGER = 120;          /* ms the flame burns after the ship stops */
+  const TIP = 14;                     /* nose tip offset from the box centre, px */
+
+  let px = -100, py = -100;           /* last pointer position */
+  let angle = 0;                      /* current nose angle, deg, screen space */
+  let lastMove = 0;                   /* performance.now() of the last real move */
+  let shipOn = false;
+  let poweredDown = false;
+  let overBar = false;
+  let onClickable = false;
+  let running = false;
+
+  const apply = () => {
+    shipEl.style.transform =
+      'translate3d(' + px.toFixed(1) + 'px,' + py.toFixed(1) + 'px,0) rotate(' + angle.toFixed(1) + 'deg) translate(-' + TIP + 'px, 0)';
+  };
+
+  /* over a scrollbar the ship powers down — the window bar hides in the gutter
+     between the viewport and the root client box, a nested scroller's bar
+     between its client box and its border box */
+  const onScrollbar = (e, t) => {
+    const root = document.documentElement;
+    if ((window.innerWidth - root.clientWidth) > 0 && e.clientX >= root.clientWidth) return true;
+    if ((window.innerHeight - root.clientHeight) > 0 && e.clientY >= root.clientHeight) return true;
+    if (!t || t.nodeType !== 1 || t === root) return false;
+    const cs = getComputedStyle(t);
+    const bl = parseFloat(cs.borderLeftWidth) || 0, bt = parseFloat(cs.borderTopWidth) || 0;
+    const br = parseFloat(cs.borderRightWidth) || 0, bb = parseFloat(cs.borderBottomWidth) || 0;
+    const vw = t.offsetWidth - bl - br - t.clientWidth;    /* vertical bar width */
+    const hh = t.offsetHeight - bt - bb - t.clientHeight;  /* horizontal bar height */
+    if (vw <= 0 && hh <= 0) return false;
+    const r = t.getBoundingClientRect();
+    return (vw > 0 && e.clientX >= r.left + bl + t.clientWidth && e.clientX <= r.right - br &&
+                        e.clientY >= r.top + bt && e.clientY <= r.bottom - bb) ||
+           (hh > 0 && e.clientY >= r.top + bt + t.clientHeight && e.clientY <= r.bottom - bb &&
+                        e.clientX >= r.left + bl && e.clientX <= r.right - br);
+  };
+
+  function step(t) {
+    if (t === undefined) t = performance.now();   /* rAF stubs may pass no timestamp */
+
+    /* burners: lit while thrusting, burning a beat after the ship stops */
+    const thrust = shipOn && !poweredDown && (t - lastMove) < THRUST_LINGER;
+    body.classList.toggle('ship-thrust', thrust);
+
+    /* the loop only runs while the flame is still burning */
+    if (thrust) {
+      requestAnimationFrame(step);
+    } else {
+      running = false;
+    }
+  }
+
+  function wake() {
+    if (!running) { running = true; requestAnimationFrame(step); }
+  }
+
+  window.addEventListener('pointermove', e => {
+    if (e.isPrimary === false) return;
+    const x = e.clientX, y = e.clientY;
+    if (!shipOn) {
+      shipOn = true;
+      px = x; py = y;
+      apply();
+      body.classList.add('ship-on');
+    }
+    const dx = x - px, dy = y - py;
+    if (Math.hypot(dx, dy) > 1.5) {         /* ignore sub-pixel jitter */
+      angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      lastMove = performance.now();
+    }
+    px = x; py = y;
+
+    /* over editing fields or a scrollbar the ship powers down; the bar
+       itself keeps the regular cursor (cursor:none would hide it) */
+    const t = e.target;
+    const field = t && t.closest ? !!t.closest('input, textarea, select') : false;
+    const bar = onScrollbar(e, t);
+    const off = field || bar;
+    if (off !== poweredDown) {
+      poweredDown = off;
+      body.classList.toggle('ship-off', off);
+    }
+    if (bar !== overBar) {
+      overBar = bar;
+      body.classList.toggle('ship-bar', bar);
+    }
+
+    /* clickable surfaces fill the hull solid, standing in for the pointer hand */
+    const clickable = t && t.closest ? !!t.closest('a[href], button, label, summary, .can-start') : false;
+    if (clickable !== onClickable) {
+      onClickable = clickable;
+      body.classList.toggle('ship-pointer', clickable);
+    }
+
+    apply();
+    wake();
+  }, { passive: true });
+
+  /* the pointer leaves the window — the ship powers down quietly */
+  const leave = () => {
+    shipOn = false;
+    poweredDown = false;
+    overBar = false;
+    onClickable = false;
+    body.classList.remove('ship-on', 'ship-thrust', 'ship-off', 'ship-bar', 'ship-pointer');
+  };
+  document.documentElement.addEventListener('pointerleave', leave);
+  window.addEventListener('blur', leave);
+})();
+
+/* ============================================================
    misc
    ============================================================ */
 const year = $('#year');
