@@ -798,11 +798,12 @@ window.addEventListener('keydown', e => {
 
 /* ============================================================
    asteroids ship cursor — the pointer becomes the little vector
-   ship: the nose points along the direction of travel and the
-   twin burner flames flicker while thrusting. Position and
-   heading track the pointer exactly so targets stay precise.
-   Enabled only on fine pointers with motion allowed — touch
-   devices, reduced motion and ?instant keep the native cursor.
+   ship: the nose eases around to the nearest 45° heading and the
+   twin burner flames flicker while thrusting. Position tracks the
+   pointer exactly so targets stay precise; only the heading is
+   quantized to eight compass directions and eased. Enabled only on
+   fine pointers with motion allowed — touch devices, reduced motion
+   and ?instant keep the native cursor.
    ============================================================ */
 (function shipCursor() {
   const shipEl = $('#ship');
@@ -816,9 +817,13 @@ window.addEventListener('keydown', e => {
 
   const THRUST_LINGER = 120;          /* ms the flame burns after the ship stops */
   const TIP = 14;                     /* nose tip offset from the box centre, px */
+  const TURN_STEP = 45;               /* nose snaps to the nearest 45° heading */
+  const TURN_EASE = 40;               /* ms constant for easing into a heading */
 
   let px = -100, py = -100;           /* last pointer position */
-  let angle = 0;                      /* current nose angle, deg, screen space */
+  let angle = 0;                      /* current eased nose angle, deg, screen space */
+  let targetAngle = 0;                /* nearest 45° heading, deg */
+  let lastFrame = 0;                  /* performance.now() of the previous frame */
   let lastMove = 0;                   /* performance.now() of the last real move */
   let shipOn = false;
   let poweredDown = false;
@@ -854,16 +859,29 @@ window.addEventListener('keydown', e => {
 
   function step(t) {
     if (t === undefined) t = performance.now();   /* rAF stubs may pass no timestamp */
+    const dt = lastFrame ? Math.min(64, t - lastFrame) : 16;
+    lastFrame = t;
+
+    /* ease the nose around the shortest arc to the snapped heading */
+    const delta = (targetAngle - angle + 540) % 360 - 180;
+    if (Math.abs(delta) < 0.1) {
+      angle = targetAngle;
+    } else {
+      angle += delta * (1 - Math.exp(-dt / TURN_EASE));
+    }
+    apply();
+    const turning = angle !== targetAngle;
 
     /* burners: lit while thrusting, burning a beat after the ship stops */
     const thrust = shipOn && !poweredDown && (t - lastMove) < THRUST_LINGER;
     body.classList.toggle('ship-thrust', thrust);
 
-    /* the loop only runs while the flame is still burning */
-    if (thrust) {
+    /* the loop runs while the flame burns or the nose is still turning */
+    if (thrust || turning) {
       requestAnimationFrame(step);
     } else {
       running = false;
+      lastFrame = 0;
     }
   }
 
@@ -882,7 +900,8 @@ window.addEventListener('keydown', e => {
     }
     const dx = x - px, dy = y - py;
     if (Math.hypot(dx, dy) > 1.5) {         /* ignore sub-pixel jitter */
-      angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const travel = Math.atan2(dy, dx) * 180 / Math.PI;
+      targetAngle = Math.round(travel / TURN_STEP) * TURN_STEP;
       lastMove = performance.now();
     }
     px = x; py = y;

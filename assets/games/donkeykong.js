@@ -42,6 +42,9 @@
     const HAMMER_TIME = 10000;  // how long one hammer swings
     const ANIM = 110;           // ms per animation frame (Mario's walk, fire flicker)
     const DEATH_FREEZE = 1400;  // frozen world while Mario spins out
+    const RESCUE_MS = 2000;     // frozen world while Mario and Pauline reunite
+    const JINGLE = [523, 659, 784, 1047];  // rescue notes: a C-major arpeggio
+    const JINGLE_GAP = 360;     // ms between rescue notes
     const BONUS_START = 5000;   // board timer at the start of a life
     const BONUS_TICK = 1100;    // ms per bonus decrement
     const BONUS_STEP = 100;     // bonus lost per tick
@@ -121,6 +124,7 @@
     const keys = { left: false, right: false, up: false, down: false, action: false };
     let mario, barrels, fireball, hammers, hammer, bonus, frozen, deathT, animT;
     let spawnAcc, bonusAcc, spawned, throwT, climbT;
+    let rescueT, jingleStep, rescueBonus;
 
     function freshHammers() {
       return HAMMER_SPOTS.map(function (s) { return { x: s.x, y: yAt(SEGS[s.seg], s.x) }; });
@@ -132,6 +136,7 @@
     function resetGame() {
       barrels = []; fireball = null; spawned = 0; throwT = 0; climbT = FIRE_GAP_MIN;
       spawnAcc = 0; bonusAcc = 0; bonus = BONUS_START; frozen = 0; deathT = 0; animT = 0;
+      rescueT = 0; jingleStep = 0; rescueBonus = 0;
       hammer = { active: false, t: 0 };
       hammers = freshHammers();
       placeMario();
@@ -156,6 +161,7 @@
     function resetBoard() {
       barrels = []; fireball = null; spawned = 0; spawnAcc = 0; bonusAcc = 0;
       bonus = BONUS_START; hammer.active = false; hammer.t = 0;
+      rescueT = 0; jingleStep = 0; rescueBonus = 0;
       hammers = freshHammers();
       placeMario();
     }
@@ -168,12 +174,31 @@
       }
       resetBoard();                            // a fresh life on a clean board
     }
-    /* Reaching Pauline banks the rest of the bonus and starts a faster board. */
+    /* Reaching Pauline banks the rest of the bonus and starts a rescue beat.
+     * The board resets when that beat ends (see step()), so the reunion gets a
+     * moment on screen instead of vanishing in the same frame as the climb. */
     function clearBoard() {
-      g.score += bonus;
-      g.level += 1;
-      blip(1046, 0.18);                        // discrete event: board cleared
-      resetBoard();
+      if (rescueT > 0) return;                 // already celebrating this rescue
+      rescueBonus = bonus;
+      g.score += rescueBonus;
+      frozen = 0; deathT = 0;
+      mario.dead = false; mario.climb = null; mario.air = false;
+      mario.vy = 0; mario.jumpY = null;
+      rescueT = RESCUE_MS; jingleStep = 0;
+      blip(JINGLE[0], 0.18);                   // discrete event: board cleared
+    }
+    /* The reunion: keep the world still, play the jingle, then raise the level. */
+    function stepRescue(dt) {
+      const elapsed = RESCUE_MS - rescueT;
+      while (jingleStep < JINGLE.length && elapsed >= jingleStep * JINGLE_GAP) {
+        if (jingleStep > 0) blip(JINGLE[jingleStep], 0.15);
+        jingleStep += 1;
+      }
+      rescueT -= dt;
+      if (rescueT <= 0) {
+        g.level += 1;
+        resetBoard();                          // next, faster board
+      }
     }
     /* A barrel or fireball scores or kills; a swinging hammer destroys instead. */
     function threat(x, y, isFire) {
@@ -400,6 +425,10 @@
         if (frozen <= 0) respawn();
         return;
       }
+      if (rescueT > 0) {                       // reunion pause: world holds still
+        stepRescue(dt);
+        return;
+      }
       stepMario(dt);
       stepBarrels(dt);
       stepFireball(dt);
@@ -477,6 +506,11 @@
         ctx.rotate(deathT * 0.013);
         marioBody(ctx, 0, 8, frame, 'jump');
         ctx.restore();
+        return;
+      }
+      if (rescueT > 0) {                                      // the reunion: arms up
+        const bob = frame ? -2 : 0;                           // a small hop
+        marioBody(ctx, px, py + bob, frame, 'jump');
         return;
       }
       const pose = m.climb ? 'climb' : m.air ? 'jump'
@@ -579,20 +613,34 @@
     }
     function drawPauline(ctx) {
       const x = PAULINE_X, y = PAULINE_Y;
+      const saved = rescueT > 0;                             // the reunion is playing
+      const frame = Math.floor(animT / ANIM) % 2;
       rect(ctx, x - 16, y - 1, 32, 4, COL.dim);              // her platform
       rect(ctx, x - 16, y - 1, 32, 1, COL.phos);             // lit top edge
       rect(ctx, x - 3, y - 20, 6, 5, COL.pac);               // hair
       rect(ctx, x - 4, y - 16, 8, 5, COL.amber);             // face
       rect(ctx, x - 5, y - 11, 10, 9, COL.red);              // dress
       rect(ctx, x - 4, y - 2, 3, 2, COL.amber);  rect(ctx, x + 2, y - 2, 3, 2, COL.amber);
-      const bx = x - 17, by = y - 39;                        // in-world HELP! bubble
-      ctx.globalAlpha = 0.3; rect(ctx, bx, by, 34, 12, COL.cyan); ctx.globalAlpha = 1;
+      const bw = saved ? 42 : 34, bx = x - bw / 2, by = y - 39;   // in-world speech bubble
+      ctx.globalAlpha = 0.3; rect(ctx, bx, by, bw, 12, COL.cyan); ctx.globalAlpha = 1;
       ctx.strokeStyle = COL.cyan; ctx.lineWidth = 1;
-      ctx.strokeRect(bx + 0.5, by + 0.5, 33, 11);
+      ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, 11);
       rect(ctx, bx + 9, by + 12, 3, 4, COL.cyan);            // tail
       ctx.fillStyle = COL.bright; ctx.font = '9px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.fillText('HELP!', x, by + 2);
+      ctx.fillText(saved ? 'SAVED!' : 'HELP!', x, by + 2);
+      if (saved) {                                           // little hearts float up
+        const lift = frame ? -2 : 0;
+        drawHeart(ctx, x - 22, by - 9 + lift, COL.red);
+        drawHeart(ctx, x + 6, by - 14 - lift, COL.pac);
+      }
+    }
+    /* A 5x5 pixel heart, drawn one row at a time like the rest of the sprites. */
+    function drawHeart(ctx, hx, hy, col) {
+      rect(ctx, hx, hy, 2, 1, col); rect(ctx, hx + 3, hy, 2, 1, col);
+      rect(ctx, hx, hy + 1, 5, 2, col);
+      rect(ctx, hx + 1, hy + 3, 3, 1, col);
+      rect(ctx, hx + 2, hy + 4, 1, 1, col);
     }
 
     /* ============================ public object =========================== */
@@ -626,7 +674,9 @@
         for (let i = 0; i < barrels.length; i++) drawBarrel(ctx, barrels[i]);
         if (fireball) drawFire(ctx, fireball);
         if (mario) drawMario(ctx);
-        label(ctx, 'BONUS ' + (bonus < 0 ? 0 : bonus), 6, 8, COL.amber, '11px monospace');
+        label(ctx, rescueT > 0 ? 'BONUS +' + rescueBonus
+                               : 'BONUS ' + (bonus < 0 ? 0 : bonus),
+              6, 8, rescueT > 0 ? COL.bright : COL.amber, '11px monospace');
         ctx.restore();
       },
       /* name: 'left' | 'right' | 'up' | 'down' | 'action'; down is boolean. */
@@ -647,7 +697,8 @@
           fireballs: fireball ? [pos(fireball)] : [],
           ladders: LADDERS.map(function (L) { return { x: L.x, yTop: L.yTop, yBottom: L.yBottom }; }),
           hammers: hammers.map(pos),
-          hammer: !!hammer.active, bonus: bonus, frozen: frozen > 0
+          hammer: !!hammer.active, bonus: bonus, frozen: frozen > 0,
+          rescuing: rescueT > 0
         };
       }
     };
