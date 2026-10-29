@@ -17,6 +17,7 @@
 
 const CAB = document.getElementById('arcade-cab');
 if (!CAB) return;
+const CURSOR_IDLE = 1000;             /* ms over a playing canvas before the ship hides */
 
 /* ---------- the four cabinets, and the colours they share ----------
  * `action` is the label for the touch pad's round button. It is what that
@@ -113,6 +114,7 @@ let hi = 0;
 let raf = 0;
 let lastTs = 0;
 let autoPaused = false;
+let cursorIdleT = 0;
 const pressed = new Set();
 const loaded = new Set();
 
@@ -194,6 +196,27 @@ function banner(lines) {
   ctx.restore();
 }
 
+function clearCursorIdle() {
+  if (cursorIdleT) { clearTimeout(cursorIdleT); cursorIdleT = 0; }
+  document.body.classList.remove('arcade-cursor-idle');
+}
+
+function scheduleCursorIdle() {
+  if (cursorIdleT || document.body.classList.contains('arcade-cursor-idle')) return;
+  if (!game || game.state !== 'playing' || !canvas.matches(':hover')) return;
+  cursorIdleT = setTimeout(function () {
+    cursorIdleT = 0;
+    if (game && game.state === 'playing' && canvas.matches(':hover')) {
+      document.body.classList.add('arcade-cursor-idle');
+    }
+  }, CURSOR_IDLE);
+}
+
+function wakeCursor() {
+  clearCursorIdle();
+  scheduleCursorIdle();
+}
+
 function render() {
   if (!game) return;
   if ((game.score || 0) > hi) { hi = game.score; writeHi(); }
@@ -201,11 +224,14 @@ function render() {
   const st = game.state;
   if (st === 'ready') banner(['INSERT COIN', 'click screen \u2014 or press START']);
   else if (st === 'paused') banner(['PAUSED', 'press P or PAUSE to resume']);
-  else if (st === 'over') banner(['GAME OVER', game.message || 'press R or START to play again']);
-  else if (st === 'win') banner(['YOU WIN', game.message || 'press R or START for another run']);
-  canvas.classList.toggle('can-start', st === 'ready' || st === 'over' || st === 'win');
+  else if (st === 'over') banner(['GAME OVER', game.message || 'press RESTART to play again']);
+  else if (st === 'win') banner(['YOU WIN', game.message || 'press RESTART for another run']);
+  canvas.classList.toggle('can-start', st === 'ready');
+  el.start.textContent = st === 'over' || st === 'win' ? '[ restart ]' : '[ start ]';
   refreshHud();
   document.body.classList.toggle('arcade-playing', st === 'playing');
+  if (st === 'playing') scheduleCursorIdle();
+  else clearCursorIdle();
 }
 
 /* ---------- the loop: runs only while a game is actually being played ---------- */
@@ -269,10 +295,12 @@ async function select(i, autostart) {
   releaseKeys();
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
   game = null;
+  clearCursorIdle();
   readHi();
   el.title.textContent = picked.name;
   el.score.textContent = '0';
   el.hi.textContent = String(hi);
+  el.start.textContent = '[ start ]';
   el.keys.textContent = picked.keys;
   /* The pad is cut to the game: the round button says what it does here
      (FIRE / JUMP / DROP / GO), Pac-Man has no action to bind so it goes away
@@ -319,8 +347,12 @@ async function select(i, autostart) {
 el.start.addEventListener('click', start);
 el.pause.addEventListener('click', pauseToggle);
 canvas.addEventListener('click', () => {
-  if (game && (game.state === 'ready' || game.state === 'over' || game.state === 'win')) start();
+  if (game && game.state === 'ready') start();
 });
+canvas.addEventListener('pointermove', wakeCursor, { passive: true });
+canvas.addEventListener('pointerenter', wakeCursor, { passive: true });
+canvas.addEventListener('pointerdown', wakeCursor, { passive: true });
+canvas.addEventListener('pointerleave', clearCursorIdle);
 
 /* keyboard: the game keys are captured before the page's own shortcuts see them */
 const KEYMAP = {
@@ -352,12 +384,15 @@ window.addEventListener('keydown', e => {
       e.preventDefault(); e.stopPropagation();
       start();
     } else if (game.state === 'over' || game.state === 'win') {
-      if (document.activeElement === canvas) { e.preventDefault(); e.stopPropagation(); start(); }
+      if (document.activeElement === canvas) { e.preventDefault(); e.stopPropagation(); }
     }
     return;
   }
   if (e.code === 'KeyP') { e.preventDefault(); e.stopPropagation(); pauseToggle(); }
-  if (e.code === 'KeyR') { e.preventDefault(); e.stopPropagation(); start(); }
+  if (e.code === 'KeyR') {
+    e.preventDefault(); e.stopPropagation();
+    if (game.state !== 'over' && game.state !== 'win') start();
+  }
 }, true);
 
 window.addEventListener('keyup', e => {

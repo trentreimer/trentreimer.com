@@ -98,7 +98,7 @@
       next = nextType(); lockAcc = 0; dropAcc = 0;
       if (collides(piece.cells, piece.x, piece.y)) {
         g.state = 'over';
-        g.message = 'GAME OVER \u2014 press R or START';
+        g.message = 'GAME OVER \u2014 press RESTART';
         blip(110, 0.26);                     // discrete event: death
       }
     }

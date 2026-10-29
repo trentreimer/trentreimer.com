@@ -171,7 +171,7 @@
       frozen = 0; deathT = 0;
       if (g.lives <= 0) {                      // the shell draws the banner from these
         g.state = 'over';
-        g.message = 'GAME OVER \u2014 press R or START';
+        g.message = 'GAME OVER \u2014 press RESTART';
         return;
       }
       resetBoard();                            // a fresh life on a clean board

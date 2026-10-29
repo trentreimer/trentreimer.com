@@ -55,9 +55,12 @@
      * in that same screen space: these are the rows its sprite box spans. */
     const PLAYER_SCREEN_Y = H - 26;      // row the wheels sit on (drawPlayer)
     const PLAYER_SCREEN_HH = 26;         // body half-height
-    const TRAFFIC = 26;                  // cars out on the track
+    const TRAFFIC = 26;                  // cars out on the track at the start
+    const TRAFFIC_PER_LAP = 5;           // extra cars added for each new lap
+    const WIN_LAPS = 5;                  // finish this many laps to win
     const CAR_MIN = MAX_SPEED * 0.34;
     const CAR_MAX = MAX_SPEED * 0.70;
+    const CAR_COLOURS = [COL.amber, COL.pac, COL.phos, COL.cyan];
     /* A clean lap is ~47s flat out and ~62s for a driver who lifts for the big
      * corners, so 75s leaves room to be quick without being perfect — and the
      * time bonus on the line rewards the difference. */
@@ -149,20 +152,39 @@
       if (d < -trackLength / 2) d += trackLength;
       return d;
     }
+    function spawnCar(z) {
+      const car = {
+        z: z,
+        offset: (Math.random() * 1.5) - 0.75,
+        speed: CAR_MIN + Math.random() * (CAR_MAX - CAR_MIN),
+        colour: CAR_COLOURS[cars.length % CAR_COLOURS.length],
+        ahead: true
+      };
+      cars.push(car);
+      segmentAt(z).cars.push(car);
+    }
+    function addTraffic(count) {
+      const minGap = SEG_LEN * 15;
+      for (let i = 0; i < count; i++) {
+        let z = 0, bestGap = -1;
+        for (let tries = 0; tries < 12; tries++) {
+          const candidate = (position + trackLength * (0.12 + Math.random() * 0.38)) % trackLength;
+          let gap = Math.abs(zdiff(candidate, position));
+          for (let k = 0; k < cars.length; k++) {
+            const d = Math.abs(zdiff(cars[k].z, candidate));
+            if (d < gap) gap = d;
+          }
+          if (gap > bestGap) { bestGap = gap; z = candidate; }
+          if (bestGap >= minGap) break;
+        }
+        spawnCar(z);
+      }
+    }
     function resetGame() {
       buildTrack();
       cars = [];
       for (let i = 0; i < TRAFFIC; i++) {
-        const z = (i + 0.5) * (trackLength / TRAFFIC);
-        const car = {
-          z: z,
-          offset: (Math.random() * 1.5) - 0.75,      // never right on the verge
-          speed: CAR_MIN + Math.random() * (CAR_MAX - CAR_MIN),
-          colour: [COL.amber, COL.pac, COL.phos, COL.cyan][i % 4],
-          ahead: true
-        };
-        cars.push(car);
-        segmentAt(z).cars.push(car);
+        spawnCar((i + 0.5) * (trackLength / TRAFFIC));
       }
       position = 0; speed = 0; playerX = 0; steerDir = 0; throttle = false; braking = false;
       lap = 1; timeLeft = LAP_TIME; crashT = 0; shakeT = 0; offT = 0; bounceT = 0; lastZ = 0;
@@ -182,7 +204,7 @@
         g.lives = 0;
         /* not over yet: the wreck is still playing out, and the last thing the
          * visitor should see is the crash, not a banner over the top of it */
-        pendingOver = reason + ' \u2014 press R or START';
+        pendingOver = reason + ' \u2014 press RESTART';
       }
     }
 
@@ -302,6 +324,7 @@
     }
 
     function step(dt) {
+      if (g.state !== 'playing') return;
       const seg = segmentAt(position);
 
       /* while the crash sprite is up the car is stopped and the controls are
@@ -356,10 +379,18 @@
       if (position >= trackLength) {                 // crossed the line
         position -= trackLength;
         lap += 1;
-        g.level = lap;
         g.score += PTS_LAP + Math.round(timeLeft / 100);
-        timeLeft = LAP_TIME;
         blip(880, 0.16);                             // discrete event: a lap done
+        if (lap > WIN_LAPS) {
+          g.level = WIN_LAPS;
+          g.state = 'win';
+          g.message = 'All ' + WIN_LAPS + ' laps cleared \u2014 ' + g.score + ' pts';
+          return;
+        }
+        g.level = lap;
+        timeLeft = LAP_TIME;
+        const target = TRAFFIC + (lap - 1) * TRAFFIC_PER_LAP;
+        addTraffic(Math.max(0, target - cars.length));
       }
 
       stepCars(dt);
@@ -648,9 +679,11 @@
       ctx.fillText(secs.toFixed(1), W - 96, 22);
       ctx.font = '13px "Share Tech Mono", monospace';
       ctx.fillStyle = COL.dim;
-      ctx.fillText('LAP ' + lap, W / 2 - 24, 8);
+      ctx.textAlign = 'center';
+      ctx.fillText('LAP ' + Math.min(lap, WIN_LAPS) + '/' + WIN_LAPS, W / 2, 8);
       ctx.fillStyle = COL.bright;
-      ctx.fillText(Math.round(position / 100) + 'm', W / 2 - 24, 22);
+      ctx.fillText(Math.round(position / 100) + 'm', W / 2, 22);
+      ctx.textAlign = 'left';
       if (Math.abs(playerX) > 1) {                     // a word for the verge
         ctx.fillStyle = COL.amber;
         ctx.fillText('OFF ROAD', W / 2 - 30, H - 46);

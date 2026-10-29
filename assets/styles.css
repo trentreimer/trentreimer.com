@@ -817,11 +817,11 @@ body.ship-cursor.ship-bar, body.ship-cursor.ship-bar * { cursor: auto !important
   will-change: transform;
 }
 body.ship-cursor.ship-on #ship { opacity: 1; }
-/* the ship powers down while the boot screen is up, while a cabinet game
-   owns the pointer, and over editing fields or a scrollbar (native cursor
-   takes over) */
-body.booting #ship, body.arcade-playing #ship,
-body.ship-cursor.ship-off #ship { opacity: 0; }
+/* the ship powers down while the boot screen is up, over editing fields or a
+   scrollbar (native cursor takes over), and after it idles over a playing
+   cabinet until the pointer moves again */
+body.booting #ship, body.ship-cursor.ship-off #ship,
+body.ship-cursor.arcade-playing.arcade-cursor-idle #ship { opacity: 0; }
 #ship .ship-hull {
   fill: rgba(4, 7, 4, .6);
   stroke: #fff; stroke-width: 1.5;
