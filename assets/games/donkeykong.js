@@ -53,6 +53,8 @@
     const DK_X = 40, DK_Y = 74;                // DK's feet (top-left perch)
     const PAULINE_X = 232, PAULINE_Y = 86;     // Pauline's feet (top-right perch)
     const WIN_X = 12;                          // |dx| to Pauline that clears it
+    const PAULINE_PLATFORM = { x0: PAULINE_X - 16, x1: PAULINE_X + 16,
+                               y0: PAULINE_Y, y1: PAULINE_Y, g: 'P' };  // her girder
     const HIT_DX = 10, HIT_LOW = -8, HIT_HIGH = 14;  // contact window (dy bounds)
     const SWAT_DX = 17, SWAT_DY = 16;          // hammer reach around Mario
     const MARIO_H = 17;                        // sprite height, feet to cap
@@ -131,7 +133,7 @@
     }
     function placeMario() {
       mario = { x: SPAWN_X, y: yAt(SEGS[FLOOR], SPAWN_X), girder: SEGS[FLOOR], vy: 0,
-                air: false, jumpY: null, climb: null, dead: false };
+                air: false, jumpY: null, climb: null, dead: false, rescueJump: false };
     }
     function resetGame() {
       barrels = []; fireball = null; spawned = 0; throwT = 0; climbT = FIRE_GAP_MIN;
@@ -150,7 +152,7 @@
     /* ============================== events ================================ */
     /* Contact threats are all routed through here so a hammer always wins. */
     function die() {
-      if (frozen > 0 || mario.dead) return;
+      if (frozen > 0 || mario.dead || mario.rescueJump) return;
       g.lives -= 1;
       mario.dead = true; mario.climb = null; mario.air = true; mario.jumpY = null;
       mario.vy = -0.05;                        // the classic little pop before the fall
@@ -183,8 +185,8 @@
       g.score += rescueBonus;
       frozen = 0; deathT = 0;
       mario.dead = false; mario.climb = null; mario.air = false;
-      mario.vy = 0; mario.jumpY = null;
-      mario.x = PAULINE_X - 11; mario.y = PAULINE_Y; mario.girder = SEGS[TOP];
+      mario.vy = 0; mario.jumpY = null; mario.rescueJump = false;
+      mario.x = PAULINE_X - 11; mario.y = PAULINE_Y; mario.girder = PAULINE_PLATFORM;
       rescueT = RESCUE_MS; jingleStep = 0;
       blip(JINGLE[0], 0.18);                   // discrete event: board cleared
     }
@@ -247,7 +249,7 @@
       }
       /* walk: clamped to the board, then stick to (or leave) the girder */
       const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-      if (dir !== 0 && !m.dead) m.x = clamp(m.x + dir * WALK * dt, 0, W);
+      if (dir !== 0 && !m.dead && !m.rescueJump) m.x = clamp(m.x + dir * WALK * dt, 0, W);
       if (keys.action && !m.air && !m.dead) {
         m.air = true; m.vy = JUMP_VY; m.jumpY = yAt(m.girder, m.x);
         blip(680, 0.05);                       // discrete event: jump
@@ -259,10 +261,18 @@
          * and come down on G3b, which is at the same level. */
         const low = m.jumpY === null ? m.y - 1 : Math.max(m.y - 1, m.jumpY - 5);
         const surf = supportAt(m.x, low);
+        const prevY = m.y;
         m.vy += GRAV * dt;
         m.y += m.vy * dt;
-        if (surf && m.vy > 0 && m.y >= surf.y) {
+        /* Pauline's platform is one-way: a jump coming down over it lands on
+         * top even though it sits above the take-off girder. */
+        const p = PAULINE_PLATFORM;
+        if (m.vy > 0 && m.x >= p.x0 && m.x <= p.x1 && prevY <= p.y0 && m.y >= p.y0) {
+          m.y = p.y0; m.girder = p; m.air = false; m.jumpY = null; m.vy = 0;
+          m.rescueJump = false;
+        } else if (surf && m.vy > 0 && m.y >= surf.y) {
           m.y = surf.y; m.girder = surf.seg; m.air = false; m.jumpY = null; m.vy = 0;
+          m.rescueJump = false;
         }
       } else if (onSeg(m.girder, m.x)) {
         m.y = yAt(m.girder, m.x);              // hug the girder along its slope
@@ -412,9 +422,16 @@
       }
     }
     function checkClear() {
-      if (mario.dead || mario.air) return;
+      if (mario.dead || mario.climb) return;
+      if (mario.girder === PAULINE_PLATFORM) { clearBoard(); return; }
       if (mario.girder !== SEGS[TOP] || Math.abs(mario.x - PAULINE_X) > WIN_X) return;
-      clearBoard();
+      /* Walking into her starts the hop; a jump already in the air is caught
+       * by the one-way landing in stepMario(). */
+      if (!mario.air) {
+        mario.air = true; mario.vy = JUMP_VY; mario.jumpY = null;
+        mario.rescueJump = true;
+        blip(680, 0.05);                       // discrete event: jump onto her platform
+      }
     }
     /* One simulation slice: everything moves on dt, nothing per frame. */
     function step(dt) {
