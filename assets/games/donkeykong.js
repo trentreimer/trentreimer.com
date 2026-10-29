@@ -184,6 +184,7 @@
       frozen = 0; deathT = 0;
       mario.dead = false; mario.climb = null; mario.air = false;
       mario.vy = 0; mario.jumpY = null;
+      mario.x = PAULINE_X - 11; mario.y = PAULINE_Y; mario.girder = SEGS[TOP];
       rescueT = RESCUE_MS; jingleStep = 0;
       blip(JINGLE[0], 0.18);                   // discrete event: board cleared
     }
@@ -509,8 +510,7 @@
         return;
       }
       if (rescueT > 0) {                                      // the reunion: arms up
-        const bob = frame ? -2 : 0;                           // a small hop
-        marioBody(ctx, px, py + bob, frame, 'jump');
+        marioBody(ctx, px, py, frame, 'jump');
         return;
       }
       const pose = m.climb ? 'climb' : m.air ? 'jump'
@@ -617,10 +617,14 @@
       const frame = Math.floor(animT / ANIM) % 2;
       rect(ctx, x - 16, y - 1, 32, 4, COL.dim);              // her platform
       rect(ctx, x - 16, y - 1, 32, 1, COL.phos);             // lit top edge
-      rect(ctx, x - 3, y - 20, 6, 5, COL.pac);               // hair
+      rect(ctx, x - 4, y - 21, 8, 5, COL.pac);               // hair
       rect(ctx, x - 4, y - 16, 8, 5, COL.amber);             // face
       rect(ctx, x - 5, y - 11, 10, 9, COL.red);              // dress
       rect(ctx, x - 4, y - 2, 3, 2, COL.amber);  rect(ctx, x + 2, y - 2, 3, 2, COL.amber);
+      rect(ctx, x - 6, y - 18, 2, 10, COL.pac);              // long left lock
+      rect(ctx, x + 4, y - 18, 2, 10, COL.pac);              // long right lock
+      rect(ctx, x - 5, y - 8, 2, 3, COL.amber);              // tapered tips
+      rect(ctx, x + 3, y - 8, 2, 3, COL.amber);
       const bw = saved ? 42 : 34, bx = x - bw / 2, by = y - 39;   // in-world speech bubble
       ctx.globalAlpha = 0.3; rect(ctx, bx, by, bw, 12, COL.cyan); ctx.globalAlpha = 1;
       ctx.strokeStyle = COL.cyan; ctx.lineWidth = 1;
