@@ -22,10 +22,12 @@
 
   /* ---------------------------------------------------------------- maze --
    * 19 columns x 16 rows of 16px tiles => the fixed 304x256 logical canvas.
-   * Mirrored about column 9, closed wall border, no dead ends, and every
-   * walkable tile is reachable from the player start.
+   * Mirrored about column 9, walled border except for the middle-row side
+   * tunnels, no dead ends, and every walkable tile is reachable from the
+   * player start.
    *   '#' wall   '.' dot   'o' power pellet   ' ' empty walkable
    *   'P' player start      '-' ghost start (the ghost house, 2 rows x 5)
+   *   'T' tunnel mouth (walkable; the two edges wrap into each other)
    */
   const MAZE = [
     '###################',
@@ -36,7 +38,7 @@
     '#....###...###....#',
     '#.##.#### ####.##.#',
     '#.##.##-- --##.##.#',
-    '#.##.##     ##.##.#',
+    'T.##.##     ##.##.T',
     '#.##.#########.##.#',
     '#....###...###....#',
     '#.##.###.#.###.##.#',
@@ -56,6 +58,20 @@
   const legend = (c, r) => MAZE[r].charAt(c);
   const isWall = (c, r) =>
     c < 0 || r < 0 || c >= COLS || r >= ROWS || MAZE[r].charAt(c) === '#';
+
+  // Tunnel mouths are walkable; stepping past either edge on their row lands
+  // on the opposite edge.  wrapTile normalises such a step for every caller.
+  const TUNNEL_ROWS = new Set();
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+    if (legend(c, r) === 'T') TUNNEL_ROWS.add(r);
+  const wrapTile = (c, r) => {
+    if (r < 0 || r >= ROWS) return null;
+    if (c < 0 || c >= COLS) {
+      if (!TUNNEL_ROWS.has(r)) return null;
+      c = (c + COLS) % COLS;
+    }
+    return { c: c, r: r };
+  };
 
   /* ---- static analysis of the maze, done once at load -------------------- */
   // The ghost house is the dotless '-'/' ' region: the player may never step
@@ -97,10 +113,10 @@
     for (let head = 0; head < queue.length; head++) {
       const i = queue[head], c = i % COLS, r = (i - c) / COLS;
       for (const d of DIRS) {
-        const nc = c + d.x, nr = r + d.y;
-        if (isWall(nc, nr) || dist[idx(nc, nr)] >= 0) continue;
-        dist[idx(nc, nr)] = dist[i] + 1;
-        queue.push(idx(nc, nr));
+        const t = wrapTile(c + d.x, r + d.y);
+        if (!t || isWall(t.c, t.r) || dist[idx(t.c, t.r)] >= 0) continue;
+        dist[idx(t.c, t.r)] = dist[i] + 1;
+        queue.push(idx(t.c, t.r));
       }
     }
     return (FIELDS[key] = dist);
@@ -108,9 +124,10 @@
 
   /* ---- tuning ------------------------------------------------------------ */
   const SPEED = { player: 84, ghost: 74, fright: 46, home: 130 };   // px/s
-  const FRIGHT_MS = 6000, DEATH_MS = 1400, CLEAR_MS = 1100;        // pauses
+  const FRIGHT_MS = 6000, DEATH_MS = 1400, CLEAR_MS = 1680;        // pauses
+  const FLASH_MS = 280, FLASH_COUNT = 3;                           // clear pulse
   const SCATTER_MS = 7000, CHASE_MS = 18000, RELEASE_MS = 900;     // AI timing
-  const BONUS_PER_LEVEL = 4, COLLIDE = 10, MAX_LEVEL = 5, TAU = Math.PI * 2;
+  const LEVEL_SPEEDUP = 8, COLLIDE = 10, MAX_LEVEL = 3, TAU = Math.PI * 2;
   const STEP = 4;                                                  // ms per tick
   const EAT_POINTS = [200, 400, 800, 1600];                        // per pellet
   const CORNERS = [{ c: COLS - 2, r: 1 }, { c: 1, r: 1 },          // scatter spots
@@ -169,6 +186,7 @@
       dotsLeft = 0;
       for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (isDot(c, r)) dotsLeft++;
       placeActors();
+      player.speed = SPEED.player + (g.level - 1) * LEVEL_SPEEDUP;
     }
 
     function reset() { g.score = 0; g.lives = 3; g.level = 1; g.message = ''; startLevel(); }
@@ -177,7 +195,9 @@
     // Walkability.  The house gate is ghost-only: the player may never step
     // inside, and a ghost may be in there only while leaving or homing.
     function canEnter(e, c, r) {
-      if (isWall(c, r)) return false;
+      const t = wrapTile(c, r);
+      if (!t || isWall(t.c, t.r)) return false;
+      c = t.c; r = t.r;
       if (!isPen(c, r)) return true;
       if (e === player) return false;
       if (e.mode === 'home') return true;
@@ -196,12 +216,20 @@
       return { x: cx, y: e.py > cy + 0.01 ? cy : cy - TILE };
     }
 
+    // Keep an entity's centre on the board; crossing a tunnel mouth teleports
+    // it just beyond the opposite edge, so it slides into view from there.
+    function wrapX(e) {
+      if (e.px < 0) e.px += W;
+      else if (e.px >= W) e.px -= W;
+    }
+
     // Grid-locked movement with smooth interpolation: travel speed*dt pixels,
     // stopping at every tile centre so `decide` can turn.  Directions only ever
     // change at a centre, and only onto a walkable tile.
     function moveEntity(e, dt, decide) {
       let budget = e.speed * dt / 1000, guard = 0;
       while (budget > 1e-6 && guard++ < 64) {
+        wrapX(e);
         const c = Math.floor(e.px / TILE), r = Math.floor(e.py / TILE);
         const cx = c * TILE + TILE / 2, cy = r * TILE + TILE / 2;
         if (Math.abs(e.px - cx) < 0.01 && Math.abs(e.py - cy) < 0.01) {
@@ -214,6 +242,7 @@
         if (step <= budget) { e.px = n.x; e.py = n.y; budget -= step; }
         else { e.px += e.dir.x * budget; e.py += e.dir.y * budget; budget = 0; }
       }
+      wrapX(e);
     }
 
     // The queued key is honoured only at a tile centre, and only if the tile it
@@ -251,8 +280,10 @@
       const dist = distField(tc, tr);
       let best = null, bestD = Infinity;
       for (const d of DIRS) {
-        const nc = c + d.x, nr = r + d.y, dd = dist[idx(nc, nr)];
-        if (canEnter(e, nc, nr) && dd >= 0 && dd < bestD) { bestD = dd; best = d; }
+        const t = wrapTile(c + d.x, r + d.y);
+        if (!t || !canEnter(e, t.c, t.r)) continue;
+        const dd = dist[idx(t.c, t.r)];
+        if (dd >= 0 && dd < bestD) { bestD = dd; best = d; }
       }
       return best;
     }
@@ -287,9 +318,10 @@
     }
 
     function ghostSpeed(gh) {
+      const bonus = (g.level - 1) * LEVEL_SPEEDUP;
       if (gh.mode === 'home') return SPEED.home;
-      if (frightT > 0) return SPEED.fright;
-      return SPEED.ghost + Math.min(20, (g.level - 1) * BONUS_PER_LEVEL);
+      if (frightT > 0) return SPEED.fright + bonus;
+      return SPEED.ghost + bonus;
     }
 
     /* ---- rules ----------------------------------------------------------- */
@@ -307,7 +339,10 @@
     function caught() {
       for (const gh of ghosts) {
         if (gh.mode === 'home') continue;                     // just floating eyes
-        const dx = gh.px - player.px, dy = gh.py - player.py;
+        let dx = gh.px - player.px;
+        const dy = gh.py - player.py;
+        if (dx > W / 2) dx -= W;                              // contact across the seam
+        else if (dx < -W / 2) dx += W;
         if (dx * dx + dy * dy > COLLIDE * COLLIDE) continue;
         if (frightT > 0) {                                    // edible: 200/400/…
           g.score += EAT_POINTS[Math.min(chain, 3)];
@@ -350,12 +385,14 @@
       if (phase === 'clear') {
         phaseT -= dt;
         if (phaseT > 0) return;
-        g.level++;
-        if (g.level > MAX_LEVEL) {
+        if (g.level >= MAX_LEVEL) {
           g.state = 'win';
           g.message = 'All ' + MAX_LEVEL + ' mazes cleared — ' + g.score + ' pts';
           phase = 'done';
-        } else startLevel();                       // keep the score, reset dots
+        } else {                                   // keep the score, reset dots
+          g.level++;
+          startLevel();
+        }
         return;
       }
 
@@ -382,10 +419,13 @@
     }
 
     /* ---- drawing --------------------------------------------------------- */
-    // Walls: rounded blocks (see WALLS).  They blink bright on a level clear.
+    // Walls: rounded blocks (see WALLS).  They flash white on a level clear.
     function drawWalls(ctx) {
       const R = 6, e = TILE;
-      ctx.fillStyle = (phase === 'clear' && Math.floor(clock / 140) % 2) ? C.bright : C.dim;
+      const pulse = Math.floor((CLEAR_MS - phaseT) / FLASH_MS);
+      const flash = phase === 'clear' &&
+        pulse < FLASH_COUNT * 2 && pulse % 2 === 0;
+      ctx.fillStyle = flash ? '#ffffff' : C.dim;
       for (const s of WALLS) {
         const x = s.x, y = s.y;
         ctx.beginPath();
