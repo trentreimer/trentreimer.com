@@ -217,15 +217,11 @@ body.crt-on::after {
 
 /* While the rail is vertical, no section may slide beneath it. Capping each
    measure symmetrically keeps the .wrap viewport-centred and leaves at least
-   --proc-gutter on both sides; the cabinet's wide 1600px cap survives intact
-   on screens that can afford it. `?only` turns the rail into a top bar at
+   --proc-gutter on both sides. `?only` turns the rail into a top bar at
    every width, so it keeps the plain measure. */
 @media (min-width: 901px) {
   body:not(.only) .wrap {
     max-width: min(1100px, calc(100% - 2 * var(--proc-gutter)));
-  }
-  body:not(.only) .arcade .wrap {
-    max-width: min(1600px, calc(100% - 2 * var(--proc-gutter)));
   }
 }
 
@@ -622,12 +618,12 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
    style it. Nothing here loads a game — the scripts arrive only when the
    visitor scrolls this far.
    ============================================================ */
-/* The arcade is the one section that earns the extra width: a cabinet wants the
-   biggest screen it can get. Everything else keeps its reading measure.
-   `width: 100%` is load-bearing — .wrap carries `margin: 0 auto`, and inside the
-   column flex that every .sec is, auto margins stop the item stretching, so it
-   shrink-to-fits its content and a max-width alone never applies. */
-.arcade .wrap { position: relative; width: 100%; max-width: 1600px; }
+/* The inline cabinet keeps the same reading measure as the rest of the page;
+   the fullscreen game view is where the big screen comes from. `width: 100%` is
+   load-bearing — .wrap carries `margin: 0 auto`, and inside the column flex that
+   every .sec is, auto margins stop the item stretching, so it shrink-to-fits
+   its content and a max-width alone never applies. */
+.arcade .wrap { position: relative; width: 100%; max-width: 1100px; }
 
 .arcade-slot {
   padding: 16px;
@@ -738,6 +734,123 @@ html:not(.js) .skill .bar i { width: calc(var(--w) * 1%); }
 body.arcade-playing { overscroll-behavior: contain; }
 
 /* ============================================================
+   fullscreen game view
+   A fixed viewport overlay, deliberately not the browser Fullscreen API:
+   the browser chrome stays available and phones behave consistently.
+   ============================================================ */
+body.arcade-fullscreen { overflow: hidden; }
+/* main is a stacking context, so lift it above the fixed page chrome while
+   the game is expanded; the CRT and ship cursor then go back on top. */
+body.arcade-fullscreen main { z-index: 1000; }
+body.arcade-fullscreen #crt { z-index: 1001; }
+body.arcade-fullscreen #ship { z-index: 1002; }
+/* the card's reveal transform would otherwise become the containing block
+   for the fixed overlay */
+body.arcade-fullscreen .arcade-slot { transform: none !important; }
+
+#arcade-cab.cab-fullscreen {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 100vh; height: 100dvh;
+  z-index: 1000;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border-radius: 0;
+  padding: 12px;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  overscroll-behavior: contain;
+}
+
+#arcade-cab.cab-fullscreen .cab-top {
+  flex: 0 0 auto;
+  position: relative;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px 10px;
+}
+#arcade-cab.cab-fullscreen .cab-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: center;
+  padding: 0;
+  overflow: hidden;
+}
+#arcade-cab.cab-fullscreen .cab-screen canvas { max-height: 100%; }
+#arcade-cab.cab-fullscreen .cab-controls,
+#arcade-cab.cab-fullscreen .cab-touch { flex: 0 0 auto; }
+#arcade-cab.cab-fullscreen .cab-controls { padding-top: 8px; }
+
+/* in-row Quit, plus the top-right hint (Esc on larger screens, X on phones) */
+.cab-quit { display: none; }
+.cab-quit-corner { display: none; }
+.cab-quit-esc, .cab-quit-x { display: none; }
+#arcade-cab.cab-fullscreen .cab-quit {
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  color: var(--amber);
+  border-color: var(--amber);
+  text-shadow: 0 0 8px rgba(255,184,77,.35);
+}
+#arcade-cab.cab-fullscreen .cab-quit:hover,
+#arcade-cab.cab-fullscreen .cab-quit:focus-visible,
+#arcade-cab.cab-fullscreen .cab-quit-corner:hover,
+#arcade-cab.cab-fullscreen .cab-quit-corner:focus-visible {
+  color: var(--phos-bright);
+  background: rgba(255,184,77,.12);
+}
+@media (min-width: 781px) {
+  #arcade-cab.cab-fullscreen .cab-quit-corner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 23px;
+    padding: 0 6px;
+    font: 14px var(--mono);
+    letter-spacing: .1em;
+    color: var(--amber);
+    background: rgba(8, 20, 10, .7);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    gap: 6px;
+    text-shadow: none;
+    cursor: pointer;
+  }
+  #arcade-cab.cab-fullscreen .cab-quit-corner:hover,
+  #arcade-cab.cab-fullscreen .cab-quit-corner:focus-visible {
+    color: var(--amber);
+    background: rgba(8, 20, 10, .7);
+    border-color: var(--phos-dim);
+  }
+  #arcade-cab.cab-fullscreen .cab-quit-corner:focus-visible {
+    outline: 1px solid var(--phos);
+    outline-offset: 1px;
+  }
+  #arcade-cab.cab-fullscreen .cab-quit-esc,
+  #arcade-cab.cab-fullscreen .cab-quit-x { display: inline; }
+  #arcade-cab.cab-fullscreen .cab-quit-x { font-size: 15px; line-height: 1; }
+}
+@media (max-width: 780px) {
+  #arcade-cab.cab-fullscreen .cab-top { padding-right: 56px; }
+  #arcade-cab.cab-fullscreen .cab-pick-wrap { display: none; }
+  #arcade-cab.cab-fullscreen .cab-quit-corner {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    position: absolute; top: 0; right: 0;
+    min-width: 44px; min-height: 44px;
+    padding: 0;
+    font-size: 22px; line-height: 1;
+    color: var(--amber);
+    border-color: var(--amber);
+    text-shadow: 0 0 8px rgba(255,184,77,.35);
+  }
+  #arcade-cab.cab-fullscreen .cab-quit-x { display: inline; font-size: 22px; line-height: 1; }
+}
+
+/* ============================================================
    footer
    ============================================================ */
 footer {
@@ -822,6 +935,8 @@ body.ship-cursor.ship-on #ship { opacity: 1; }
    cabinet until the pointer moves again */
 body.booting #ship, body.ship-cursor.ship-off #ship,
 body.ship-cursor.arcade-playing.arcade-cursor-idle #ship { opacity: 0; }
+body.arcade-fullscreen.arcade-cursor-idle #arcade-cab,
+body.arcade-fullscreen.arcade-cursor-idle #arcade-cab * { cursor: none !important; }
 #ship .ship-hull {
   fill: rgba(4, 7, 4, .6);
   stroke: #fff; stroke-width: 1.5;

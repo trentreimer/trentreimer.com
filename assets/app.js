@@ -781,6 +781,10 @@ $$('#proc a').forEach(a => {
 window.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+  /* the fullscreen game view owns the keyboard; only sound still answers */
+  if (document.body.classList.contains('arcade-fullscreen') &&
+      e.key !== 'm' && e.key !== 'M') return;
+
   /* while a cabinet game is running the arrows and number keys belong to the
      game — only the sound toggle still answers to the page */
   if (document.body.classList.contains('arcade-playing') && e.key !== 'm' && e.key !== 'M') return;

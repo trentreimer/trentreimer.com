@@ -18,6 +18,7 @@
 const CAB = document.getElementById('arcade-cab');
 if (!CAB) return;
 const CURSOR_IDLE = 1000;             /* ms over a playing canvas before the ship hides */
+const INLINE_MAX_H = 700;             /* px; the in-page cabinet stays a little smaller */
 
 /* ---------- the four cabinets, and the colours they share ----------
  * `action` is the label for the touch pad's round button. It is what that
@@ -67,12 +68,19 @@ CAB.innerHTML =
     '<span class="cab-stat" id="cab-level-wrap">LVL <b id="cab-level">1</b></span>' +
     '<label class="cab-pick-wrap"><span class="cab-pick-label">GAME</span>' +
       '<select class="cab-pick" id="cab-pick" aria-label="Choose a game"></select></label>' +
+    '<button class="cab-btn cab-quit-corner" id="cab-quit-corner" type="button" ' +
+      'aria-label="Quit game" aria-keyshortcuts="Escape">' +
+      '<span class="cab-quit-esc">Esc</span>' +
+      '<span class="cab-quit-x" aria-hidden="true">\u00d7</span>' +
+    '</button>' +
   '</div>' +
   '<div class="cab-screen"><canvas id="cab-canvas" width="300" height="300" tabindex="0" ' +
     'aria-label="Arcade screen"></canvas></div>' +
   '<div class="cab-controls">' +
     '<button class="cab-btn" id="cab-start" type="button">[ start ]</button>' +
     '<button class="cab-btn" id="cab-pause" type="button" aria-pressed="false">[ pause ]</button>' +
+    '<button class="cab-btn cab-quit" id="cab-quit" type="button" ' +
+      'aria-label="Quit game" aria-keyshortcuts="Escape">[ quit ]</button>' +
     '<span class="cab-keys" id="cab-keys"></span>' +
   '</div>' +
   '<div class="cab-touch">' +
@@ -99,13 +107,18 @@ const el = {
   pause: document.getElementById('cab-pause'),
   fire: document.getElementById('cab-fire'),
   pick: document.getElementById('cab-pick'),
+  quit: document.getElementById('cab-quit'),
+  quitCorner: document.getElementById('cab-quit-corner'),
   dpad: CAB.querySelector('.cab-dpad')
 };
 /* The selector lists every cabinet by name, so the choice is deliberate rather
  * than a surprise. It shows the game in hand and swaps to another on change. */
 el.pick.innerHTML = GAMES.map((g, i) =>
   '<option value="' + i + '">' + g.name + '</option>').join('');
-el.pick.addEventListener('change', () => { select(parseInt(el.pick.value, 10), true); });
+el.pick.addEventListener('change', () => {
+  enterFullscreen();
+  select(parseInt(el.pick.value, 10), true);
+});
 
 /* ---------- state ---------- */
 let index = pickIndex();
@@ -115,8 +128,16 @@ let raf = 0;
 let lastTs = 0;
 let autoPaused = false;
 let cursorIdleT = 0;
+let savedScrollY = 0;
+let savedCardMinHeight = '';
+let savedFocus = null;
+let savedRole = null;
+let savedAriaModal = null;
+let savedAriaLabel = null;
 const pressed = new Set();
 const loaded = new Set();
+const FOCUSABLE = 'button:not([hidden]), select:not([hidden]), canvas[tabindex], [href], ' +
+  '[tabindex]:not([tabindex="-1"])';
 
 /* ---------- hi-scores ---------- */
 const hiKey = () => 'tr-hiscore-' + GAMES[index].key;
@@ -154,17 +175,105 @@ function loadScript(src) {
 function fitScreen() {
   if (!game) return;
   const screen = canvas.parentElement;
+  const full = isFullscreenOpen();
   const avail = (screen && screen.clientWidth) || CAB.clientWidth || game.w;
-  /* measured from the CARD, not the cabinet: the frame the visitor sees is the
-     card, and its padding and border sit outside the cabinet's own chrome */
-  const frame = CAB.closest('.card') || CAB;
-  const chrome = Math.max(0,
-    frame.getBoundingClientRect().height - canvas.getBoundingClientRect().height);
-  const room = (window.innerHeight || 800) - chrome - 12;   // 12px of breathing space
-  const maxH = Math.max(200, Math.round(room));
+  let maxH;
+  if (full) {
+    /* fullscreen: the screen row owns the space left by the HUD and controls */
+    maxH = (screen && screen.clientHeight) ||
+      Math.max(200, (window.innerHeight || 800) - 48);
+  } else {
+    /* inline: measured from the CARD, not the cabinet — the frame the visitor
+       sees is the card, and its padding and border sit outside the cabinet's
+       own chrome. The cap keeps this console smaller than the game view. */
+    const frame = CAB.closest('.card') || CAB;
+    const chrome = Math.max(0,
+      frame.getBoundingClientRect().height - canvas.getBoundingClientRect().height);
+    const room = (window.innerHeight || 800) - chrome - 12;   // 12px of breathing space
+    maxH = Math.max(200, Math.min(Math.round(room), INLINE_MAX_H));
+  }
   const scale = Math.min(avail / game.w, maxH / game.h);
   canvas.style.width = Math.max(1, Math.round(game.w * scale)) + 'px';
   canvas.style.height = Math.max(1, Math.round(game.h * scale)) + 'px';
+}
+
+/* ---------- fullscreen game view ----------
+ * This is deliberately a full-viewport overlay rather than the browser
+ * Fullscreen API: the browser chrome stays put, which keeps the page's own
+ * character and behaves consistently on phones. */
+function isFullscreenOpen() {
+  return document.body.classList.contains('arcade-fullscreen');
+}
+
+function fullscreenFocusables() {
+  return Array.prototype.filter.call(CAB.querySelectorAll(FOCUSABLE), node =>
+    node.getClientRects().length > 0 && !node.disabled &&
+    node.getAttribute('aria-hidden') !== 'true');
+}
+
+function trapFullscreenTab(e) {
+  const nodes = fullscreenFocusables();
+  if (!nodes.length) return;
+  const first = nodes[0], last = nodes[nodes.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+function enterFullscreen() {
+  if (isFullscreenOpen()) return;
+  savedScrollY = window.scrollY | 0;
+  savedFocus = document.activeElement;
+  savedRole = CAB.getAttribute('role');
+  savedAriaModal = CAB.getAttribute('aria-modal');
+  savedAriaLabel = CAB.getAttribute('aria-label');
+  const card = CAB.closest('.card') || CAB;
+  savedCardMinHeight = card.style.minHeight;
+  /* hold the inline card's space so the document behind does not reflow */
+  card.style.minHeight = Math.round(card.getBoundingClientRect().height) + 'px';
+
+  document.body.classList.add('arcade-fullscreen');
+  CAB.classList.add('cab-fullscreen');
+  CAB.setAttribute('role', 'dialog');
+  CAB.setAttribute('aria-modal', 'true');
+  CAB.setAttribute('aria-label', 'Arcade game');
+  requestAnimationFrame(fitScreen);
+}
+
+function exitFullscreenView() {
+  if (!isFullscreenOpen()) return;
+  const card = CAB.closest('.card') || CAB;
+  const scrollY = savedScrollY;
+  const focusTarget = savedFocus && savedFocus !== document.body &&
+    document.contains(savedFocus) ? savedFocus : el.start;
+
+  document.body.classList.remove('arcade-fullscreen');
+  CAB.classList.remove('cab-fullscreen');
+  if (savedRole === null) CAB.removeAttribute('role');
+  else CAB.setAttribute('role', savedRole);
+  if (savedAriaModal === null) CAB.removeAttribute('aria-modal');
+  else CAB.setAttribute('aria-modal', savedAriaModal);
+  if (savedAriaLabel === null) CAB.removeAttribute('aria-label');
+  else CAB.setAttribute('aria-label', savedAriaLabel);
+  card.style.minHeight = savedCardMinHeight;
+
+  autoPaused = false;
+  if (game && game.state === 'playing') pauseToggle();
+
+  savedScrollY = 0;
+  savedFocus = null;
+  savedCardMinHeight = '';
+  savedRole = savedAriaModal = savedAriaLabel = null;
+
+  requestAnimationFrame(() => {
+    fitScreen();
+    window.scrollTo(0, scrollY);
+    try { focusTarget.focus({ preventScroll: true }); } catch (e) { focusTarget.focus(); }
+  });
 }
 
 /* ---------- HUD + banners ---------- */
@@ -203,10 +312,10 @@ function clearCursorIdle() {
 
 function scheduleCursorIdle() {
   if (cursorIdleT || document.body.classList.contains('arcade-cursor-idle')) return;
-  if (!game || game.state !== 'playing' || !canvas.matches(':hover')) return;
+  if (!game || game.state !== 'playing') return;
   cursorIdleT = setTimeout(function () {
     cursorIdleT = 0;
-    if (game && game.state === 'playing' && canvas.matches(':hover')) {
+    if (game && game.state === 'playing') {
       document.body.classList.add('arcade-cursor-idle');
     }
   }, CURSOR_IDLE);
@@ -223,7 +332,7 @@ function render() {
   game.draw(ctx);
   const st = game.state;
   if (st === 'ready') banner(['INSERT COIN', 'click screen \u2014 or press START']);
-  else if (st === 'paused') banner(['PAUSED', 'press P or PAUSE to resume']);
+  else if (st === 'paused') banner(['PAUSED', 'click screen, press P or PAUSE to resume']);
   else if (st === 'over') banner(['GAME OVER', game.message || 'press RESTART to play again']);
   else if (st === 'win') banner(['YOU WIN', game.message || 'press RESTART for another run']);
   canvas.classList.toggle('can-start', st === 'ready');
@@ -268,6 +377,11 @@ function start() {
   try { canvas.focus({ preventScroll: true }); } catch (e) { canvas.focus(); }
 }
 
+function startFullscreen() {
+  enterFullscreen();
+  start();
+}
+
 function pauseToggle() {
   if (!game) return;
   if (game.state === 'playing') {
@@ -275,6 +389,8 @@ function pauseToggle() {
     game.state = 'paused';
     render();
   } else if (game.state === 'paused') {
+    autoPaused = false;
+    enterFullscreen();
     game.state = 'playing';
     render();
     play();
@@ -344,15 +460,19 @@ async function select(i, autostart) {
 }
 
 /* ---------- controls ---------- */
-el.start.addEventListener('click', start);
+el.start.addEventListener('click', startFullscreen);
 el.pause.addEventListener('click', pauseToggle);
+el.quit.addEventListener('click', exitFullscreenView);
+el.quitCorner.addEventListener('click', exitFullscreenView);
 canvas.addEventListener('click', () => {
-  if (game && game.state === 'ready') start();
+  if (!game) return;
+  if (game.state === 'ready') startFullscreen();
+  else if (game.state === 'paused') pauseToggle();
 });
-canvas.addEventListener('pointermove', wakeCursor, { passive: true });
-canvas.addEventListener('pointerenter', wakeCursor, { passive: true });
-canvas.addEventListener('pointerdown', wakeCursor, { passive: true });
-canvas.addEventListener('pointerleave', clearCursorIdle);
+CAB.addEventListener('pointermove', wakeCursor, { passive: true });
+CAB.addEventListener('pointerenter', wakeCursor, { passive: true });
+CAB.addEventListener('pointerdown', wakeCursor, { passive: true });
+CAB.addEventListener('pointerleave', clearCursorIdle);
 
 /* keyboard: the game keys are captured before the page's own shortcuts see them */
 const KEYMAP = {
@@ -373,7 +493,18 @@ function release(name) {
 }
 
 window.addEventListener('keydown', e => {
-  if (!game || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (isFullscreenOpen()) {
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      exitFullscreenView();
+      return;
+    }
+    if (e.key === 'Tab') { trapFullscreenTab(e); return; }
+  }
+
+  if (!game) return;
   const name = KEYMAP[e.code];
 
   if (name) {
@@ -382,7 +513,7 @@ window.addEventListener('keydown', e => {
       if (!e.repeat) press(name);
     } else if (game.state === 'ready' && document.activeElement === canvas) {
       e.preventDefault(); e.stopPropagation();
-      start();
+      startFullscreen();
     } else if (game.state === 'over' || game.state === 'win') {
       if (document.activeElement === canvas) { e.preventDefault(); e.stopPropagation(); }
     }
@@ -391,7 +522,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyP') { e.preventDefault(); e.stopPropagation(); pauseToggle(); }
   if (e.code === 'KeyR') {
     e.preventDefault(); e.stopPropagation();
-    if (game.state !== 'over' && game.state !== 'win') start();
+    if (game.state !== 'over' && game.state !== 'win') startFullscreen();
   }
 }, true);
 
@@ -451,6 +582,7 @@ window.__arcade = {
   press,
   release,
   fitScreen,
+  fullscreen: () => isFullscreenOpen(),
   debug: () => (game && typeof game.debug === 'function' ? game.debug() : null),
   canvasSize: () => ({ w: canvas.width, h: canvas.height,
                        displayW: canvas.clientWidth, displayH: canvas.clientHeight })
